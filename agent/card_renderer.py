@@ -69,16 +69,31 @@ BADGE_COLORS = {
 
 FONTS_DIR = Path(__file__).resolve().parent / "assets" / "fonts"
 
-def clean_ascii_text(text: str) -> str:
-    """Removes unsupported non-ascii symbols and normalizes whitespace."""
+def clean_display_text(text: str) -> str:
+    """
+    Cleans and preserves English, Hindi (Devanagari \u0900-\u097F), Rupee (₹ \u20B9),
+    and standard punctuation, while stripping emojis and control characters.
+    """
     if not text:
         return ""
-    # Normalize unicode quotes and dashes
-    cleaned = text.replace("“", '"').replace("”", '"').replace("’", "'").replace("‘", "'")
+    cleaned = str(text)
+    cleaned = cleaned.replace("“", '"').replace("”", '"').replace("’", "'").replace("‘", "'")
     cleaned = cleaned.replace("—", " - ").replace("–", " - ")
-    # Keep standard printable ascii
-    cleaned = re.sub(r'[^\x20-\x7E]+', ' ', cleaned).strip()
+    cleaned = re.sub(r'https?://\S+', '', cleaned)
+    cleaned = re.sub(r'(?:www\.)?(?:nexams|nadmissions|hpushimla|hpuniv)\S+', 'portal', cleaned)
+    cleaned = re.sub(r'\s*-\s*(?:ANI\s*News|Amar\s*Ujala|Divya\s*Himachal|The\s*Tribune|Hindustan\s*Times|Times\s*of\s*India|Indian\s*Express|Jagran|News18).*$', '', cleaned, flags=re.IGNORECASE)
+
+    # Allow ASCII printable, Devanagari block (\u0900-\u097F), Rupee sign (\u20B9), Hindi danda (\u0964, \u0965)
+    allowed_pattern = r'[^\x20-\x7E\u0900-\u097F\u20B9\u0964\u0965]+'
+    cleaned = re.sub(allowed_pattern, ' ', cleaned).strip()
     return re.sub(r'\s+', ' ', cleaned)
+
+# Backward-compatibility alias
+clean_ascii_text = clean_display_text
+
+def is_hindi_text(text: str) -> bool:
+    """Returns True if the text contains Devanagari characters."""
+    return bool(re.search(r'[\u0900-\u097F]', text or ""))
 
 def get_font(font_type: str, size: int) -> ImageFont.FreeTypeFont:
     """
@@ -167,11 +182,51 @@ def draw_ambient_background(img: Image.Image, draw: ImageDraw.ImageDraw, badge_k
     draw.line([(WIDTH - 28, HEIGHT - 28), (WIDTH - 28 - corner_len, HEIGHT - 28)], fill=THEME["corner_accent"], width=4)
     draw.line([(WIDTH - 28, HEIGHT - 28), (WIDTH - 28, HEIGHT - 28 - corner_len)], fill=THEME["corner_accent"], width=4)
 
-def draw_header(draw: ImageDraw.ImageDraw, badge_text: str, slide_num: int = 1, total_slides: int = 1) -> str:
-    """Renders top verified community header and category status badge."""
+BADGE_KEYWORDS = {
+    "BREAKING": ["BREAKING", "ALERT", "URGENT", "ब्रेकिंग", "अलर्ट", "ताज़ा", "ताजा", "तत्काल", "महत्वपूर्ण"],
+    "RESULT": ["RESULT", "MERIT", "SCORE", "परिणाम", "रिजल्ट", "मेरिट", "अंक"],
+    "EXAM": ["EXAM", "DATESHEET", "DATE SHEET", "SCHEDULE", "परीक्षा", "डेटशीट", "समय सारणी", "टाइम टेबल"],
+    "ADMISSION": ["ADMISSION", "COUNSEL", "SEAT", "प्रवेश", "दाखिला", "काउंसलिंग", "मेरिट सूची"],
+    "HOLIDAY": ["HOLIDAY", "CLOSED", "CLOSURE", "छुट्टी", "अवकाश", "बंद"],
+    "GENERAL": ["UPDATE", "NOTICE", "CIRCULAR", "अपडेट", "सूचना", "नोटिस", "रिसर्च", "शोध", "खोज"]
+}
+
+BADGE_MAP_TO_HINDI = {
+    "BREAKING NEWS": "ताज़ा अपडेट",
+    "BREAKING": "ताज़ा अपडेट",
+    "RESULT OUT": "परीक्षा परिणाम",
+    "RESULTS DECLARED": "परीक्षा परिणाम",
+    "RESULT": "परीक्षा परिणाम",
+    "EXAM ALERT": "परीक्षा सूचना",
+    "EXAM NOTICE": "परीक्षा सूचना",
+    "EXAM": "परीक्षा सूचना",
+    "ADMISSION ALERT": "प्रवेश सूचना",
+    "ADMISSION UPDATE": "प्रवेश सूचना",
+    "ADMISSION": "प्रवेश सूचना",
+    "CAMPUS ALERT": "परिसर अलर्ट",
+    "HOLIDAY": "अवकाश सूचना",
+    "OFFICIAL UPDATE": "आधिकारिक सूचना",
+    "UPDATE": "आधिकारिक सूचना",
+}
+
+def draw_header(draw: ImageDraw.ImageDraw, badge_text: str, slide_num: int = 1, total_slides: int = 1, is_hindi: bool = False) -> str:
+    """Renders top verified community header and category status badge in English or Hindi."""
+    clean_badge = clean_display_text(badge_text).strip()
+    is_hi = is_hindi or is_hindi_text(clean_badge)
+
+    # Translate English badge to Hindi if the card context is in Hindi
+    if is_hi and not is_hindi_text(clean_badge):
+        upper_raw = clean_badge.upper()
+        for eng_k, hin_v in BADGE_MAP_TO_HINDI.items():
+            if eng_k in upper_raw:
+                clean_badge = hin_v
+                break
+        if not is_hindi_text(clean_badge):
+            clean_badge = "आधिकारिक सूचना"
+
     # Top Live Status Bar
     top_font = get_font("bold", 22)
-    top_text = "HPU PULSE  •  STUDENT UPDATES"
+    top_text = "एचपीयू शिमला  •  विद्यार्थी अपडेट्स" if is_hi else "HPU PULSE  •  STUDENT UPDATES"
     bbox = draw.textbbox((0, 0), top_text, font=top_font)
     tw = bbox[2] - bbox[0]
 
@@ -185,14 +240,14 @@ def draw_header(draw: ImageDraw.ImageDraw, badge_text: str, slide_num: int = 1, 
     draw.line([(WIDTH / 2 - 80, 98), (WIDTH / 2 + 80, 98)], fill=THEME["card_border"], width=2)
 
     # Determine badge key
-    clean_badge = clean_ascii_text(badge_text).upper()
     if not clean_badge:
-        clean_badge = "OFFICIAL UPDATE"
+        clean_badge = "आधिकारिक सूचना" if is_hi else "OFFICIAL UPDATE"
 
+    upper_badge = clean_badge.upper()
     badge_key = "GENERAL"
-    for k in BADGE_COLORS:
-        if k in clean_badge:
-            badge_key = k
+    for cat, kws in BADGE_KEYWORDS.items():
+        if any(kw in upper_badge for kw in kws):
+            badge_key = cat
             break
     colors = BADGE_COLORS[badge_key]
 
@@ -227,55 +282,54 @@ def draw_header(draw: ImageDraw.ImageDraw, badge_text: str, slide_num: int = 1, 
         prog_text = f"{slide_num}/{total_slides}"
         p_bbox = draw.textbbox((0, 0), prog_text, font=prog_font)
         pw = p_bbox[2] - p_bbox[0]
-        # Rounded pill for slide number
         px = WIDTH - pw - 85
         draw.rounded_rectangle([px - 14, by + 2, px + pw + 14, by + pill_h - 2], radius=10, fill=THEME["card_bg"], outline=THEME["card_border"], width=1)
         draw.text((px, by + 8), prog_text, fill=THEME["primary"], font=prog_font)
 
     return badge_key
 
-def draw_footer(draw: ImageDraw.ImageDraw, is_cover: bool = False):
-    """Draws crisp verified community footer."""
+def draw_footer(draw: ImageDraw.ImageDraw, is_cover: bool = False, is_hindi: bool = False):
+    """Draws crisp verified community footer in English or Hindi."""
     f_font = get_font("bold", 24)
-    handle_text = f"{INSTAGRAM_HANDLE}  •  Himachal Pradesh University"
+    uni_name = "हिमाचल प्रदेश विश्वविद्यालय" if is_hindi else "Himachal Pradesh University"
+    handle_text = f"{INSTAGRAM_HANDLE}  •  {uni_name}"
     f_bbox = draw.textbbox((0, 0), handle_text, font=f_font)
     fw = f_bbox[2] - f_bbox[0]
     draw.text(((WIDTH - fw) / 2, HEIGHT - 105), handle_text, fill=THEME["footer"], font=f_font)
 
     sub_font = get_font("regular", 20)
-    sub_text = "Save this post  •  Share with your classmates"
+    sub_text = "यह पोस्ट सेव करें  •  सहपाठियों के साथ शेयर करें" if is_hindi else "Save this post  •  Share with your classmates"
     s_bbox = draw.textbbox((0, 0), sub_text, font=sub_font)
     sw = s_bbox[2] - s_bbox[0]
     draw.text(((WIDTH - sw) / 2, HEIGHT - 70), sub_text, fill=THEME["dim"], font=sub_font)
 
 def parse_points(details: str, key_points: list = None) -> list:
     """
-    Intelligently extracts a list of distinct structured points.
+    Intelligently extracts a list of distinct structured points in English or Hindi.
     Prevents running a paragraph into visual lines that each get bulleted!
     """
     if key_points and isinstance(key_points, list) and len(key_points) > 0:
-        return [clean_ascii_text(str(p)) for p in key_points if str(p).strip()]
+        cleaned_pts = [clean_display_text(str(p)) for p in key_points if clean_display_text(str(p))]
+        if cleaned_pts:
+            return cleaned_pts
 
     if not details:
         return ["Details available on official student portal.", "Check your student account for more instructions."]
 
-    cleaned = clean_ascii_text(details)
-    cleaned = re.sub(r'https?://\S+', '', cleaned)
-    cleaned = re.sub(r'(?:www\.)?(?:nexams|nadmissions|hpushimla|hpuniv)\S+', 'student portal', cleaned)
-    cleaned = re.sub(r'\s*-\s*(?:ANI\s*News|Amar\s*Ujala|Divya\s*Himachal|The\s*Tribune|Hindustan\s*Times|Times\s*of\s*India|Indian\s*Express|Jagran|News18).*$', '', cleaned, flags=re.IGNORECASE)
+    cleaned = clean_display_text(details)
 
-    # Split by newlines, bullets, or distinct sentences
+    # Split by newlines, bullets, or numbers
     raw_splits = re.split(r'\n+|•|\b(?:\d+[\.\)]\s+)', cleaned)
     points = []
     for s in raw_splits:
         item = s.strip()
-        if len(item) > 10:
+        if len(item) > 8:
             points.append(item)
 
     if not points:
-        # Fallback split into sentences
-        sentences = re.split(r'(?<=[.!?])\s+', cleaned)
-        points = [st.strip() for st in sentences if len(st.strip()) > 12]
+        # Fallback split into sentences (handles English . ! ? and Hindi danda ।)
+        sentences = re.split(r'(?<=[.!?।])\s+', cleaned)
+        points = [st.strip() for st in sentences if len(st.strip()) > 8]
 
     return points[:4] if points else [cleaned[:100]]
 
@@ -283,11 +337,29 @@ def render_breaking_card(headline: str, category: str = "GENERAL", details: str 
     """
     Renders a stunning 1080x1350 card with Modern Dark Obsidian aesthetic,
     Poppins typography, and CORRECT bullet point indentation (NO multiple bullets on wrapped lines!).
+    Supports both English and Hindi.
     """
+    clean_h = clean_display_text(headline)
+    points = parse_points(details, key_points)
+    is_hi = is_hindi_text(f"{clean_h} {' '.join(points)} {badge} {details}")
+
+    # Fallback safeguard against empty points
+    if not points:
+        if is_hi:
+            points = [
+                "विस्तृत जानकारी के लिए आधिकारिक छात्र पोर्टल पर लॉगिन करें।",
+                "सभी आवश्यक दिशा-निर्देश पोर्टल पर उपलब्ध करा दिए गए हैं।"
+            ]
+        else:
+            points = [
+                "Details available on official student portal.",
+                "Check your student account for more instructions."
+            ]
+
     badge_key = "GENERAL"
-    for k in BADGE_COLORS:
-        if k in (badge or "").upper() or k in (category or "").upper():
-            badge_key = k
+    for cat, kws in BADGE_KEYWORDS.items():
+        if any(kw in (badge or "").upper() for kw in kws) or any(kw in (category or "").upper() for kw in kws):
+            badge_key = cat
             break
 
     img = Image.new("RGB", (WIDTH, HEIGHT), THEME["bg"])
@@ -297,10 +369,9 @@ def render_breaking_card(headline: str, category: str = "GENERAL", details: str 
     draw_ambient_background(img, draw, badge_key)
 
     # 2. Header
-    draw_header(draw, badge)
+    draw_header(draw, badge, is_hindi=is_hi)
 
     # 3. Clean Headline
-    clean_h = clean_ascii_text(headline)
     h_font = get_font("bold", 54)
     h_lines = wrap_text(clean_h, h_font, WIDTH - 180, draw)
     h_lines = h_lines[:3]  # Max 3 lines
@@ -326,14 +397,11 @@ def render_breaking_card(headline: str, category: str = "GENERAL", details: str 
 
     # Section header inside card
     sub_head_font = get_font("semibold", 24)
-    sub_head_text = "KEY DETAILS & UPDATES"
+    sub_head_text = "मुख्य बिंदु और विवरण" if is_hi else "KEY DETAILS & UPDATES"
     draw.text((105, box_top + 32), sub_head_text, fill=THEME["muted"], font=sub_head_font)
     draw.line([(105, box_top + 64), (WIDTH - 105, box_top + 64)], fill=THEME["card_border"], width=1)
 
     # 5. FIXED BULLET POINTS RENDERING:
-    # ONLY draw bullet dot on the first visual line of each distinct point!
-    # Subsequent wrapped lines are indented and HAVE NO BULLET DOT!
-    points = parse_points(details, key_points)
     p_font = get_font("medium", 30)
     bullet_color = BADGE_COLORS[badge_key]["bullet"]
     
@@ -364,7 +432,7 @@ def render_breaking_card(headline: str, category: str = "GENERAL", details: str 
         py += 22
 
     # 6. Footer
-    draw_footer(draw, is_cover=True)
+    draw_footer(draw, is_cover=True, is_hindi=is_hi)
 
     out_path = OUTPUT_DIR / f"hpu_card_{uuid.uuid4().hex[:8]}.png"
     img.save(str(out_path), "PNG", quality=95)
@@ -373,17 +441,23 @@ def render_breaking_card(headline: str, category: str = "GENERAL", details: str 
 def render_carousel_slides(carousel_data: dict) -> list:
     """
     Renders 2-5 premium slides in Modern Dark Obsidian theme with Poppins fonts.
-    Correct bullet rendering, sleek swipe indicators, zero URLs.
+    Correct bullet rendering, sleek swipe indicators, zero URLs, full Hindi & English support.
     """
     slides = carousel_data.get("slides", [])
     badge = carousel_data.get("badge", "UPDATE")
     total = len(slides)
     slide_paths = []
 
+    # Detect if the overall carousel data is in Hindi
+    all_text = f"{badge} {carousel_data.get('headline', '')}"
+    for s in slides:
+        all_text += f" {s.get('title', '')} {s.get('subtitle', '')} {s.get('heading', '')} {' '.join(str(p) for p in s.get('points', []))}"
+    is_hi_overall = is_hindi_text(all_text)
+
     badge_key = "GENERAL"
-    for k in BADGE_COLORS:
-        if k in (badge or "").upper():
-            badge_key = k
+    for cat, kws in BADGE_KEYWORDS.items():
+        if any(kw in (badge or "").upper() for kw in kws):
+            badge_key = cat
             break
 
     bullet_color = BADGE_COLORS[badge_key]["bullet"]
@@ -394,12 +468,13 @@ def render_carousel_slides(carousel_data: dict) -> list:
 
         # Ambient Glow & Framing
         draw_ambient_background(img, draw, badge_key)
-        draw_header(draw, badge, slide_num=idx, total_slides=total)
+        draw_header(draw, badge, slide_num=idx, total_slides=total, is_hindi=is_hi_overall)
 
         if idx == 1:
             # COVER SLIDE
-            title = clean_ascii_text(s.get("title", carousel_data.get("headline", "HPU Update")))
-            subtitle = clean_ascii_text(s.get("subtitle", ""))
+            title = clean_display_text(s.get("title", carousel_data.get("headline", "HPU Update")))
+            subtitle = clean_display_text(s.get("subtitle", ""))
+            is_hi_cover = is_hi_overall or is_hindi_text(f"{title} {subtitle} {badge}")
 
             t_font = get_font("bold", 60)
             t_lines = wrap_text(title, t_font, WIDTH - 180, draw)
@@ -419,7 +494,7 @@ def render_carousel_slides(carousel_data: dict) -> list:
 
             # Modern Swipe Cue Button Pill
             sw_font = get_font("bold", 24)
-            sw_text = "SWIPE FOR FULL DETAILS  >>"
+            sw_text = "पूरी जानकारी के लिए स्वाइप करें  >>" if is_hi_cover else "SWIPE FOR FULL DETAILS  >>"
             sw_bbox = draw.textbbox((0, 0), sw_text, font=sw_font)
             sw_w = sw_bbox[2] - sw_bbox[0]
             sw_h = sw_bbox[3] - sw_bbox[1]
@@ -437,11 +512,28 @@ def render_carousel_slides(carousel_data: dict) -> list:
                 width=2
             )
             draw.text(((WIDTH - sw_w) / 2, pill_y + 11), sw_text, fill=THEME["primary"], font=sw_font)
+            draw_footer(draw, is_cover=True, is_hindi=is_hi_cover)
 
         else:
             # DETAIL SLIDES
-            heading = clean_ascii_text(s.get("heading", "Key Information"))
-            points = s.get("points", [])
+            default_heading = "मुख्य विवरण" if is_hi_overall else "Key Information"
+            heading = clean_display_text(s.get("heading") or default_heading)
+            raw_points = s.get("points", [])
+            points = [clean_display_text(str(p)) for p in raw_points if clean_display_text(str(p))]
+            is_hi_detail = is_hi_overall or is_hindi_text(f"{heading} {' '.join(points)}")
+
+            # CRITICAL SAFEGUARD: Never leave a content card blank!
+            if not points:
+                if is_hi_detail:
+                    points = [
+                        "विस्तृत जानकारी के लिए आधिकारिक छात्र पोर्टल पर लॉगिन करें।",
+                        "सभी आवश्यक दिशा-निर्देश पोर्टल पर उपलब्ध करा दिए गए हैं।"
+                    ]
+                else:
+                    points = [
+                        "Details available on official student portal.",
+                        "Check your student account for more instructions."
+                    ]
 
             h_font = get_font("bold", 46)
             draw.text((85, 230), heading, fill=THEME["primary"], font=h_font)
@@ -462,14 +554,10 @@ def render_carousel_slides(carousel_data: dict) -> list:
             max_p_width = WIDTH - 260
 
             for pt in points:
-                clean_pt = clean_ascii_text(pt)
-                clean_pt = re.sub(r'https?://\S+', '', clean_pt)
-                clean_pt = re.sub(r'(?:www\.)?(?:nexams|nadmissions|hpushimla|hpuniv)\S+', 'student portal', clean_pt)
-                clean_pt = clean_pt.strip()
-                if not clean_pt:
+                if not pt:
                     continue
 
-                wrapped_pt = wrap_text(clean_pt, p_font, max_p_width, draw)
+                wrapped_pt = wrap_text(pt, p_font, max_p_width, draw)
                 for line_i, line in enumerate(wrapped_pt):
                     if py > box_bottom - 50:
                         break
@@ -487,7 +575,7 @@ def render_carousel_slides(carousel_data: dict) -> list:
                 # Paragraph gap between points
                 py += 24
 
-        draw_footer(draw, is_cover=(idx == 1))
+            draw_footer(draw, is_cover=False, is_hindi=is_hi_detail)
 
         slide_file = OUTPUT_DIR / f"slide_{uuid.uuid4().hex[:8]}_{idx}.png"
         img.save(str(slide_file), "PNG", quality=95)
