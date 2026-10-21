@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 from .base_scraper import BaseScraper
+from ..freshness import is_item_fresh
 
 class HPUOfficialScraper(BaseScraper):
     """
@@ -63,7 +64,7 @@ class HPUOfficialScraper(BaseScraper):
                     notice_date = date_match.group(0) if date_match else None
 
                     domain = "icdeolhpu.org" if "icdeol" in url else "hpuniv.ac.in"
-                    items.append({
+                    candidate = {
                         "source": f"Official Portal ({domain})",
                         "source_priority": 3,
                         "title": title[:120],
@@ -75,7 +76,10 @@ class HPUOfficialScraper(BaseScraper):
                         "official_ref_no": None,
                         "raw_text": text,
                         "summary": text
-                    })
+                    }
+                    fresh, reason = is_item_fresh(candidate)
+                    if fresh:
+                        items.append(candidate)
             except Exception as e:
                 # Resilience against intermittent server errors or 500 status from hpuniv.ac.in
                 print(f"[HPUOfficialScraper] Resilient fallback on {url}: {e}")

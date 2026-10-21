@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from typing import List, Dict, Optional, Any
 from .config import DB_PATH
+from .freshness import is_item_fresh
 
 def get_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -154,6 +155,8 @@ def get_pending_tier1_items() -> List[Dict[str, Any]]:
     1. Instagram Competitor Pages (@hpuupdate, @hpudailyupdates, etc.)
     2. Regional Newspapers (Amar Ujala, Divya Himachal, The Tribune)
     3. Official University Portals (nexams, nadmissions, hpuniv)
+
+    STRICT FRESHNESS: Stale items older than today/24h are marked EXPIRED_STALE and dropped.
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -169,8 +172,23 @@ def get_pending_tier1_items() -> List[Dict[str, Any]]:
             scraped_at DESC
     """)
     rows = [dict(r) for r in cursor.fetchall()]
+
+    fresh_items = []
+    stale_ids = []
+    for r in rows:
+        fresh, reason = is_item_fresh(r)
+        if fresh:
+            fresh_items.append(r)
+        else:
+            stale_ids.append(r["id"])
+
+    if stale_ids:
+        placeholders = ",".join("?" for _ in stale_ids)
+        cursor.execute(f"UPDATE scraped_items SET status = 'EXPIRED_STALE' WHERE id IN ({placeholders})", stale_ids)
+        conn.commit()
+
     conn.close()
-    return rows
+    return fresh_items
 
 def get_waiting_batch_items(category: Optional[str] = None) -> List[Dict[str, Any]]:
     """
@@ -178,6 +196,8 @@ def get_waiting_batch_items(category: Optional[str] = None) -> List[Dict[str, An
     1. Instagram Competitor Pages
     2. Regional Newspapers
     3. Official University Portals
+
+    STRICT FRESHNESS: Stale items older than today/24h are marked EXPIRED_STALE and dropped.
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -208,8 +228,53 @@ def get_waiting_batch_items(category: Optional[str] = None) -> List[Dict[str, An
                 b.enqueued_at DESC
         """)
     rows = [dict(r) for r in cursor.fetchall()]
+
+    fresh_items = []
+    stale_item_ids = []
+    stale_queue_ids = []
+    for r in rows:
+        fresh, reason = is_item_fresh(r)
+        if fresh:
+            fresh_items.append(r)
+        else:
+            stale_item_ids.append(r["id"])
+            if r.get("queue_id"):
+                stale_queue_ids.append(r["queue_id"])
+
+    if stale_item_ids:
+        placeholders = ",".join("?" for _ in stale_item_ids)
+        cursor.execute(f"UPDATE scraped_items SET status = 'EXPIRED_STALE' WHERE id IN ({placeholders})", stale_item_ids)
+    if stale_queue_ids:
+        placeholders = ",".join("?" for _ in stale_queue_ids)
+        cursor.execute(f"UPDATE batch_queue SET status = 'EXPIRED_STALE' WHERE id IN ({placeholders})", stale_queue_ids)
+    if stale_item_ids or stale_queue_ids:
+        conn.commit()
+
     conn.close()
-    return rows
+    return fresh_items
+
+def purge_stale_pending_items() -> int:
+    """Purges all existing pending/waiting items that are older than today."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM scraped_items WHERE status = 'PENDING'")
+    pending = [dict(r) for r in cursor.fetchall()]
+    purged_count = 0
+    stale_ids = []
+    for item in pending:
+        fresh, reason = is_item_fresh(item)
+        if not fresh:
+            stale_ids.append(item["id"])
+            purged_count += 1
+
+    if stale_ids:
+        placeholders = ",".join("?" for _ in stale_ids)
+        cursor.execute(f"UPDATE scraped_items SET status = 'EXPIRED_STALE' WHERE id IN ({placeholders})", stale_ids)
+        cursor.execute(f"UPDATE batch_queue SET status = 'EXPIRED_STALE' WHERE scraped_item_id IN ({placeholders})", stale_ids)
+        conn.commit()
+
+    conn.close()
+    return purged_count
 
 def mark_items_published(item_ids: List[int]):
     """Marks scraped items and batch queue items as PUBLISHED."""

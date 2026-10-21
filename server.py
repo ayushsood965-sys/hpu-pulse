@@ -37,7 +37,7 @@ from agent.agent import (
     run_automated_check_and_post_cycle
 )
 from agent.auto_commenter import process_comments
-from agent.db import init_db
+from agent.db import init_db, purge_stale_pending_items
 
 app = FastAPI(title="HPU Pulse — Autonomous Agent Control Center")
 
@@ -161,6 +161,9 @@ agent_manager = AgentManager()
 @app.on_event("startup")
 def on_startup():
     init_db()
+    purged = purge_stale_pending_items()
+    if purged:
+        log_event(f"🧹 Purged {purged} stale items from database on startup.")
     agent_manager.start()
 
 @app.on_event("shutdown")

@@ -50,44 +50,51 @@ DO NOT mention or credit any other Instagram page or source.
 """
 
     prompt = f"""
-You are the student creator behind '@hpu.pulse', an authentic student community page like @hpuupdate.
-Rephrase and summarize this university update so it feels like a knowledgeable student admin posted it.
+You are the student creator behind '@hpu.pulse', an authentic, highly respected student community page like @hpuupdate.
+Rephrase and synthesize this university update into an authoritative, informative post for students.
 {ig_directive}
 Notice Content:
 - Title: {title}
 - Source: {source}
 - Date: {notice_date}
-- Content: {raw_text[:600]}
-- Circular Details: {ocr_text[:600]}
+- Content: {raw_text[:700]}
+- Circular Details: {ocr_text[:700]}
 
-STRICT RULES:
-1. NEVER mention any URLs, website names, links, or sources (DO NOT write 'hpushimla.in', 'nexams', 'Source: ...', or 'Download link').
-2. Tone: Friendly, concise, clear, and written by a human student, exactly like @hpuupdate.
-3. Headline: Short, punchy, maximum 7 words (e.g. "B.Sc 2nd Sem Results Out!", "Exam Postponed for Tomorrow", "B.Ed Counselling Schedule Released").
-4. Bullet Points: Keep them short and easy to read on a mobile screen:
-   - What happened
-   - Who is eligible / affected
-   - Important deadlines / dates
-   - Action to take (e.g. "Check results via student login", "Submit forms before the deadline")
+STRICT USER MANDATES:
+1. ZERO ULTRA-VAGUE POSTS:
+   Never write generic statements like "Protest held on campus" or "Examination notice released".
+   You MUST extract and include specific context:
+   - WHAT: Exactly what happened or was officially declared.
+   - WHERE: Specific location (e.g. Summerhill Campus, VC Office, Pink Petals, Law Auditorium, or specific colleges/districts).
+   - WHEN: Exact date/time (e.g. Today morning, scheduled for tomorrow, application deadline date).
+   - WHY / REASON: The core reason, demands, or background (e.g. protesting hostel room shortages, fee hike rollback, re-evaluation delay, syllabus completion, etc.).
+   - ACTION / IMPACT: What students need to do, deadline to note, or admin response.
+2. NO URLS OR WEBSITE LINKS:
+   Never mention 'hpushimla.in', 'nexams', 'Download link', 'Source: ...'. Say "Available via student login" or "Check on the student portal".
+3. Headline: Short, punchy, maximum 7 words (e.g. "SFI Protests at VC Office Over Hostels", "B.Sc 2nd Sem Results Declared").
+4. KEY POINTS (3 to 4 points, max 18-20 words each):
+   - Point 1: Core development (What happened)
+   - Point 2: Specific Location & Timing (Where and When)
+   - Point 3: Reasons, student demands, or criteria (Why)
+   - Point 4: Action required / student impact (Next steps)
 5. Carousel Slides (2 to 4 slides):
    - Slide 1 (Cover): Punchy title + short subtitle + badge
-   - Slide 2: "What You Need to Know" (2-3 crisp bullet points)
-   - Slide 3: "Important Details & Dates" (2-3 crisp bullet points)
-   - Slide 4 (Optional): "Quick Reminder" ("Share with your batchmates", "Save for reference")
-6. Instagram Caption:
-   - Engaging hook (e.g. "Important update for all HPU students! 📢")
-   - 3-4 bullet breakdown
-   - Friendly sign-off (e.g. "Tag your classmates so they know! 👇")
-   - 15 popular student hashtags (#hpu #hpushimla #hpuupdates #hpuresults #hpuexams #himachalpradeshuniversity #shimla)
-   - NO URLS.
+   - Slide 2: "What Happened" (2-3 detailed bullet points)
+   - Slide 3: "Key Reasons & Details" (2-3 detailed bullet points with Where/When/Why)
+   - Slide 4: "Next Steps" (Actionable guidance for students)
 
 Return ONLY a valid JSON object matching this schema:
 {{
   "tier": "TIER1_BREAKING" or "TIER2_ROUTINE",
   "category": "EXAM" or "RESULT" or "ADMISSION" or "HOLIDAY" or "GENERAL",
-  "badge": "BREAKING NEWS" or "RESULT OUT" or "EXAM ALERT" or "ADMISSION UPDATE",
+  "badge": "BREAKING NEWS" or "RESULT OUT" or "EXAM ALERT" or "ADMISSION UPDATE" or "CAMPUS ALERT",
   "headline": "...",
   "audio_track_id": "...",
+  "key_points": [
+    "...",
+    "...",
+    "..."
+  ],
   "slides": [
     {{"title": "...", "subtitle": "...", "badge": "..."}},
     {{"heading": "...", "points": ["...", "..."]}},
@@ -112,6 +119,12 @@ Return ONLY a valid JSON object matching this schema:
                 raw_out = "\n".join([p.get("text", "") for p in parts if "text" in p])
                 parsed = extract_json_from_response(raw_out)
                 if parsed and "headline" in parsed:
+                    if not parsed.get("key_points") and parsed.get("slides"):
+                        # Extract key points from first slide with points
+                        for s in parsed["slides"]:
+                            if s.get("points"):
+                                parsed["key_points"] = s["points"]
+                                break
                     return parsed
         except Exception as e:
             print(f"[AI Triage] Gemini API warning: {e}")
@@ -130,30 +143,52 @@ Return ONLY a valid JSON object matching this schema:
                     raw_out = res.json()["choices"][0]["message"]["content"]
                     parsed = extract_json_from_response(raw_out)
                     if parsed and "headline" in parsed:
+                        if not parsed.get("key_points") and parsed.get("slides"):
+                            for s in parsed["slides"]:
+                                if s.get("points"):
+                                    parsed["key_points"] = s["points"]
+                                    break
                         return parsed
             except Exception:
                 continue
 
-    # Clean Fallback
+    # Clean Fallback with real context extraction
     is_breaking = item.get("priority") == "TIER1_BREAKING"
     badge = "BREAKING NEWS" if is_breaking else "OFFICIAL UPDATE"
     headline = title[:50] or "HPU University Notice"
+
+    # Contextual extraction from available text
+    desc_clean = clean_text_no_urls(item.get("summary") or raw_text or "")
+    where_match = re.search(r"(?:at|in|near)\s+([A-Z][a-zA-Z\s]{3,25}(?:Campus|Secretariat|Office|Auditorium|Lawns|Shimla|Summerhill))", desc_clean)
+    location_str = where_match.group(0) if where_match else "HPU Summerhill Campus"
+
+    points = [
+        f"{title[:80]}",
+        f"Location: {location_str} | Date: {notice_date}",
+        "Details: Check your student login account for full departmental instructions",
+        "Save this post & share with your classmates to stay updated"
+    ]
+
     return {
         "tier": "TIER1_BREAKING" if is_breaking else "TIER2_ROUTINE",
         "category": item.get("category", "GENERAL"),
         "badge": badge,
         "headline": headline,
         "audio_track_id": "cornfield_chase" if is_breaking else "reflections",
+        "key_points": points,
         "slides": [
             {"title": headline, "subtitle": f"Date: {notice_date}", "badge": badge},
-            {"heading": "What You Need to Know", "points": [title, "Make sure to check your student login for full details."]},
-            {"heading": "Next Steps", "points": ["Save this post for reference", "Share with friends who need this update"]}
+            {"heading": "What You Need to Know", "points": points[:2]},
+            {"heading": "Key Details & Action", "points": points[2:]}
         ],
         "caption": (
             f"📢 {badge}: {headline}\n\n"
-            f"Quick update for students:\n• {title}\n"
-            f"• Login to your student account for detailed lists.\n\n"
-            f"Tag your batchmates so they don't miss this! 👇\n\n"
+            f"Here is what students need to know:\n"
+            f"• {points[0]}\n"
+            f"• {points[1]}\n"
+            f"• {points[2]}\n\n"
+            f"Check your student portal for individual scorecards and schedules.\n"
+            f"Tag your batchmates below! 👇\n\n"
             f"#hpu #hpushimla #hpuupdates #hpuresult #hpuexams #himachalpradeshuniversity #shimla"
         )
     }
@@ -226,7 +261,7 @@ Return ONLY a valid JSON object matching this schema:
             "generationConfig": {"temperature": 0.4, "maxOutputTokens": 1000}
         }
         try:
-            resp = requests.post(url, json=payload, timeout=12)
+            resp = requests.post(url, json=payload, timeout=25)
             if resp.status_code == 200:
                 res_data = resp.json()
                 candidate = res_data.get("candidates", [{}])[0]

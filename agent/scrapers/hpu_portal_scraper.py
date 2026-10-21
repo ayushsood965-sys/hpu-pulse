@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 from .base_scraper import BaseScraper
+from ..freshness import is_item_fresh
 
 class HPUPortalScraper(BaseScraper):
     """
@@ -182,25 +183,31 @@ class HPUPortalScraper(BaseScraper):
         return items[:10]
 
     def scrape_all(self) -> List[Dict[str, Any]]:
-        results = []
+        raw_results = []
         try:
-            results.extend(self.scrape_admissions_portal())
+            raw_results.extend(self.scrape_admissions_portal())
         except Exception as e:
             print(f"[HPUPortalScraper] Admissions scrape warning: {e}")
 
         try:
-            results.extend(self.scrape_exams_portal())
+            raw_results.extend(self.scrape_exams_portal())
         except Exception as e:
             print(f"[HPUPortalScraper] Exams scrape warning: {e}")
 
         try:
-            results.extend(self.scrape_student_portal())
+            raw_results.extend(self.scrape_student_portal())
         except Exception as e:
             print(f"[HPUPortalScraper] Student portal scrape warning: {e}")
 
         try:
-            results.extend(self.scrape_recruitment_portal())
+            raw_results.extend(self.scrape_recruitment_portal())
         except Exception as e:
             print(f"[HPUPortalScraper] Recruitment portal scrape warning: {e}")
 
-        return results
+        fresh_results = []
+        for it in raw_results:
+            fresh, reason = is_item_fresh(it)
+            if fresh:
+                fresh_results.append(it)
+
+        return fresh_results

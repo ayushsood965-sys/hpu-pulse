@@ -5,6 +5,7 @@ import requests
 from typing import List, Dict, Any
 from .base_scraper import BaseScraper
 from ..config import INSTAGRAM_ACCESS_TOKEN, INSTAGRAM_ACCOUNT_ID
+from ..freshness import is_item_fresh
 
 class SocialScraper(BaseScraper):
     """
@@ -104,7 +105,7 @@ class SocialScraper(BaseScraper):
                     elif "holiday" in cleaned_lower:
                         category = "HOLIDAY"
 
-                    items.append({
+                    candidate = {
                         "source": f"Instagram @{handle}",
                         "source_priority": 1,
                         "title": cleaned[:120],
@@ -116,7 +117,11 @@ class SocialScraper(BaseScraper):
                         "official_ref_no": None,
                         "raw_text": f"Competitor Post from @{handle}: {cleaned}. {desc}",
                         "summary": cleaned
-                    })
+                    }
+                    fresh, reason = is_item_fresh(candidate)
+                    if not fresh:
+                        continue
+                    items.append(candidate)
             except Exception as e:
                 print(f"[SocialScraper] RSS error for @{handle}: {e}")
 
@@ -161,7 +166,7 @@ class SocialScraper(BaseScraper):
                     elif "admission" in caption_lower or "merit" in caption_lower:
                         category = "ADMISSION"
 
-                    items.append({
+                    candidate = {
                         "source": f"Instagram @{handle}",
                         "source_priority": 1,
                         "title": cleaned[:120],
@@ -173,7 +178,11 @@ class SocialScraper(BaseScraper):
                         "official_ref_no": None,
                         "raw_text": cleaned,
                         "summary": cleaned[:250]
-                    })
+                    }
+                    fresh, reason = is_item_fresh(candidate)
+                    if not fresh:
+                        continue
+                    items.append(candidate)
             except Exception:
                 pass
 

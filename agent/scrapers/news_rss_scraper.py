@@ -3,6 +3,7 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 from typing import List, Dict, Any
 from .base_scraper import BaseScraper
+from ..freshness import is_item_fresh
 
 class NewsRSSScraper(BaseScraper):
     """
@@ -103,7 +104,7 @@ class NewsRSSScraper(BaseScraper):
                 elif "holiday" in title_lower or "छुट्टी" in title_lower or "अवकाश" in title_lower:
                     category = "HOLIDAY"
 
-                items.append({
+                candidate = {
                     "source": f"Regional News ({pub})",
                     "source_priority": 2,
                     "title": cleaned_title,
@@ -114,8 +115,16 @@ class NewsRSSScraper(BaseScraper):
                     "notice_date": pub_date,
                     "official_ref_no": None,
                     "raw_text": f"Regional Newspaper ({pub}) Report: {cleaned_title}. {desc}",
-                    "summary": cleaned_title
-                })
+                    "summary": f"{cleaned_title}\n{desc}" if desc else cleaned_title
+                }
+
+                # STRICT FRESHNESS FILTER: Only today or upcoming
+                fresh, reason = is_item_fresh(candidate)
+                if not fresh:
+                    # Drop stale news
+                    continue
+
+                items.append(candidate)
         except Exception as e:
             print(f"[NewsRSSScraper] XML parsing error for '{pub}': {e}")
 

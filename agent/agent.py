@@ -51,9 +51,16 @@ def publish_breaking_reel_cycle(item: Optional[Dict[str, Any]] = None, dry_run: 
     print(f"  Headline: \"{headline}\"")
     print(f"  Badge: {badge} | Audio Track ID: {audio_id}")
 
-    # Step 2: Render 1080x1350 base card
+    # Step 2: Render 1080x1350 base card with synthesized key points
     details = item.get("ocr_text") or item.get("raw_text") or item.get("summary") or ""
-    card_path = render_breaking_card(headline, category=item.get("category", "BREAKING"), details=details, badge=badge)
+    key_points = ai_content.get("key_points")
+    card_path = render_breaking_card(
+        headline=headline,
+        category=item.get("category", "BREAKING"),
+        details=details,
+        badge=badge,
+        key_points=key_points
+    )
 
     # Step 3: Render 9:16 Video Reel with Instagram Audio
     reel_path, track_info = create_looping_reel(card_path, track_id=audio_id)

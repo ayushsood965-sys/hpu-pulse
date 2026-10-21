@@ -12,6 +12,7 @@ from .news_rss_scraper import NewsRSSScraper
 from .hpu_portal_scraper import HPUPortalScraper
 from .hpu_official_scraper import HPUOfficialScraper
 from .pdf_ocr_parser import process_circular_pdf
+from ..freshness import is_item_fresh
 from ..db import save_scraped_item, is_content_seen, compute_hash
 
 def run_crawler_pipeline() -> List[Dict[str, Any]]:
@@ -51,6 +52,12 @@ def run_crawler_pipeline() -> List[Dict[str, Any]]:
     portal_scraper = HPUPortalScraper()
 
     for item in raw_candidates:
+        # STRICT FRESHNESS FILTER: Only today's updates or upcoming schedules
+        fresh, reason = is_item_fresh(item)
+        if not fresh:
+            # Drop old historical notices
+            continue
+
         content_hash = compute_hash(f"{item.get('url')}_{item.get('title')}")
         item["content_hash"] = content_hash
 
