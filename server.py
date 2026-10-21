@@ -237,12 +237,26 @@ def get_status(request: Request, authorization: Optional[str] = Header(None), hp
         replies_count = 0
 
     cursor.execute("""
-        SELECT b.id, s.title, b.category, s.scraped_at
+        SELECT b.id, s.title, b.category, s.scraped_at, s.source
         FROM batch_queue b JOIN scraped_items s ON b.scraped_item_id = s.id
-        WHERE b.status = 'WAITING' ORDER BY b.enqueued_at ASC LIMIT 25
+        WHERE b.status = 'WAITING' 
+        ORDER BY 
+            CASE 
+                WHEN s.source LIKE 'Instagram%' THEN 1
+                WHEN s.source LIKE '%News%' OR s.source LIKE '%Amar Ujala%' OR s.source LIKE '%Divya Himachal%' OR s.source LIKE '%Tribune%' THEN 2
+                ELSE 3
+            END ASC,
+            b.enqueued_at DESC 
+        LIMIT 25
     """)
     queued_rows = cursor.fetchall()
-    queued_items = [{"id": r[0], "title": r[1], "category": r[2], "scraped_at": r[3]} for r in queued_rows]
+    queued_items = [{
+        "id": r[0], 
+        "title": r[1], 
+        "category": r[2], 
+        "scraped_at": r[3],
+        "source": r[4] if len(r) > 4 else "Portal"
+    } for r in queued_rows]
 
     cursor.execute("""
         SELECT id, post_type, tier, category, headline, instagram_media_id, published_at, audio_track

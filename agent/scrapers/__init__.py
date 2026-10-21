@@ -7,29 +7,31 @@ if sys.stdout.encoding != 'utf-8':
     except Exception:
         pass
 from typing import List, Dict, Any
+from .social_scraper import SocialScraper
+from .news_rss_scraper import NewsRSSScraper
 from .hpu_portal_scraper import HPUPortalScraper
 from .hpu_official_scraper import HPUOfficialScraper
-from .news_rss_scraper import NewsRSSScraper
-from .social_scraper import SocialScraper
 from .pdf_ocr_parser import process_circular_pdf
 from ..db import save_scraped_item, is_content_seen, compute_hash
 
 def run_crawler_pipeline() -> List[Dict[str, Any]]:
     """
-    Executes the full multi-source crawler pipeline:
-    1. Scrapes official portals, subdomains, RSS news, and social feeds.
-    2. Deduplicates via SHA-256 content hash in SQLite.
-    3. If an item contains a circular PDF, downloads and parses digital text or OCR.
-    4. Saves newly discovered items into the database.
-    Returns: List of newly discovered items.
+    Executes the prioritized multi-source crawler pipeline:
+    1. PRIORITY 1 (Highest): Popular Student & Community Instagram Pages (@hpuupdate, @hpudailyupdates, @sfihpu, etc.)
+    2. PRIORITY 2 (Medium): Regional Newspaper Streams (Amar Ujala, Divya Himachal, The Tribune)
+    3. PRIORITY 3 (Least): Official University Portals & Subdomains (nexams, nadmissions, nstudentportal, recruitment, icdeol, hpuniv)
+
+    Deduplicates via SHA-256 content hash in SQLite.
+    PDF OCR extraction fallback for official circulars.
+    Returns: List of newly discovered items ordered by source priority.
     """
-    print(f"\n[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 🕷 Starting 30-Minute Multi-Source Crawl...")
+    print(f"\n[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 🕷 Starting Prioritized Multi-Source Crawl...")
 
     scrapers = [
-        HPUPortalScraper(),
-        NewsRSSScraper(),
-        HPUOfficialScraper(),
-        SocialScraper()
+        SocialScraper(),       # Priority 1: Instagram Competitor Pages
+        NewsRSSScraper(),      # Priority 2: Regional Newspapers
+        HPUPortalScraper(),    # Priority 3: Official Subdomains
+        HPUOfficialScraper()   # Priority 3: Official University Pages
     ]
 
     raw_candidates = []
@@ -41,6 +43,9 @@ def run_crawler_pipeline() -> List[Dict[str, Any]]:
             raw_candidates.extend(items)
         except Exception as e:
             print(f"  ❌ Error running scraper {s.name}: {e}")
+
+    # Sort raw candidates strictly by source priority (1: Instagram -> 2: Newspapers -> 3: Official)
+    raw_candidates.sort(key=lambda x: x.get("source_priority", 3))
 
     newly_saved_items = []
     portal_scraper = HPUPortalScraper()
@@ -68,7 +73,8 @@ def run_crawler_pipeline() -> List[Dict[str, Any]]:
         if item_id:
             item["id"] = item_id
             newly_saved_items.append(item)
-            print(f"  ✨ NEW UPDATE RECORDED [ID: {item_id}] [{item['priority']}] [{item['category']}]: {item['title'][:70]}")
+            p_badge = "★ PRIORITY 1 (IG)" if item.get("source_priority") == 1 else ("◆ PRIORITY 2 (NEWS)" if item.get("source_priority") == 2 else "○ PRIORITY 3 (PORTAL)")
+            print(f"  ✨ {p_badge} [{item['priority']}] [{item['category']}]: {item['title'][:65]}")
 
     print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 🕷 Crawl complete. {len(newly_saved_items)} new unique items saved to DB.")
     return newly_saved_items

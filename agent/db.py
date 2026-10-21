@@ -149,20 +149,36 @@ def save_scraped_item(item: Dict[str, Any]) -> Optional[int]:
         conn.close()
 
 def get_pending_tier1_items() -> List[Dict[str, Any]]:
-    """Returns all unposted Tier 1 breaking news items."""
+    """
+    Returns all unposted Tier 1 breaking news items, prioritized by source:
+    1. Instagram Competitor Pages (@hpuupdate, @hpudailyupdates, etc.)
+    2. Regional Newspapers (Amar Ujala, Divya Himachal, The Tribune)
+    3. Official University Portals (nexams, nadmissions, hpuniv)
+    """
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT * FROM scraped_items 
         WHERE priority = 'TIER1_BREAKING' AND status = 'PENDING'
-        ORDER BY scraped_at ASC
+        ORDER BY 
+            CASE 
+                WHEN source LIKE 'Instagram%' THEN 1
+                WHEN source LIKE '%News%' OR source LIKE '%Amar Ujala%' OR source LIKE '%Divya Himachal%' OR source LIKE '%Tribune%' THEN 2
+                ELSE 3
+            END ASC,
+            scraped_at DESC
     """)
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
     return rows
 
 def get_waiting_batch_items(category: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Returns waiting items from the batch queue."""
+    """
+    Returns waiting items from the batch queue, prioritized by source:
+    1. Instagram Competitor Pages
+    2. Regional Newspapers
+    3. Official University Portals
+    """
     conn = get_connection()
     cursor = conn.cursor()
     if category:
@@ -170,14 +186,26 @@ def get_waiting_batch_items(category: Optional[str] = None) -> List[Dict[str, An
             SELECT s.*, b.id as queue_id FROM batch_queue b
             JOIN scraped_items s ON b.scraped_item_id = s.id
             WHERE b.status = 'WAITING' AND b.category = ?
-            ORDER BY b.enqueued_at ASC
+            ORDER BY 
+                CASE 
+                    WHEN s.source LIKE 'Instagram%' THEN 1
+                    WHEN s.source LIKE '%News%' OR s.source LIKE '%Amar Ujala%' OR s.source LIKE '%Divya Himachal%' OR s.source LIKE '%Tribune%' THEN 2
+                    ELSE 3
+                END ASC,
+                b.enqueued_at DESC
         """, (category,))
     else:
         cursor.execute("""
             SELECT s.*, b.id as queue_id FROM batch_queue b
             JOIN scraped_items s ON b.scraped_item_id = s.id
             WHERE b.status = 'WAITING'
-            ORDER BY b.enqueued_at ASC
+            ORDER BY 
+                CASE 
+                    WHEN s.source LIKE 'Instagram%' THEN 1
+                    WHEN s.source LIKE '%News%' OR s.source LIKE '%Amar Ujala%' OR s.source LIKE '%Divya Himachal%' OR s.source LIKE '%Tribune%' THEN 2
+                    ELSE 3
+                END ASC,
+                b.enqueued_at DESC
         """)
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()

@@ -659,11 +659,11 @@
     <div class="action-panel">
       <div class="section-title">⚡ Instant Workflow Triggers</div>
       <div class="action-grid">
-        <div class="action-btn" onclick="triggerAction('/api/crawl-now', 'Multi-Source Crawl Started!')">
+        <div class="action-btn" onclick="triggerAction('/api/crawl-now', 'Prioritized Multi-Source Crawl Started!')">
           <div class="action-icon">🕷</div>
           <div>
-            <div class="action-title">Run 30-Min Crawl</div>
-            <div class="action-desc">Scan nexams, nadmissions & RSS</div>
+            <div class="action-title">Run Prioritized Crawl</div>
+            <div class="action-desc">Priority: IG Pages → News → Portals</div>
           </div>
         </div>
 
@@ -897,12 +897,19 @@
       // Render Queue
       const queueList = document.getElementById("queue-list");
       if (data.queued_items && data.queued_items.length > 0) {
-        queueList.innerHTML = data.queued_items.slice(0, 8).map(q => `
-          <div class="queue-item">
-            <span class="queue-cat">${escapeHtml(q.category)}</span>
-            <span class="queue-title" title="${escapeHtml(q.title)}">${escapeHtml(q.title)}</span>
-          </div>
-        `).join("");
+        queueList.innerHTML = data.queued_items.slice(0, 8).map(q => {
+          const isIG = q.source && q.source.includes('Instagram');
+          const isNews = q.source && q.source.includes('News');
+          const pillClass = isIG ? 'color: #38DF7B; background: rgba(56, 223, 123, 0.15); border: 1px solid rgba(56, 223, 123, 0.3);' : (isNews ? 'color: #38BDF8; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3);' : 'color: #F59E0B; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3);');
+          const pillText = isIG ? 'IG Priority' : (isNews ? 'Newspaper' : 'Official');
+          return `
+            <div class="queue-item">
+              <span class="queue-cat">${escapeHtml(q.category)}</span>
+              <span style="font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px; ${pillClass}">${pillText}</span>
+              <span class="queue-title" title="${escapeHtml(q.title)}">${escapeHtml(q.title)}</span>
+            </div>
+          `;
+        }).join("");
       } else {
         queueList.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">No items waiting in batch queue.</div>';
       }

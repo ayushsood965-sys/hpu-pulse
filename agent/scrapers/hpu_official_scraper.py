@@ -5,8 +5,13 @@ from bs4 import BeautifulSoup
 from .base_scraper import BaseScraper
 
 class HPUOfficialScraper(BaseScraper):
+    """
+    Priority 3 (Least Priority):
+    - https://www.hpuniv.ac.in/: VC orders, executive council decisions, holidays, circulars (with 500-error resilience)
+    - https://icdeolhpu.org/: International Centre for Distance Education & Open Learning circulars
+    """
     def __init__(self):
-        super().__init__(name="HPUOfficialScraper")
+        super().__init__(name="HPUOfficialScraper (hpuniv.ac.in & ICDEOL - Priority 3)")
         self.endpoints = [
             "https://www.hpuniv.ac.in/notifications",
             "https://www.hpuniv.ac.in/circulars",
@@ -19,12 +24,12 @@ class HPUOfficialScraper(BaseScraper):
         items = []
         for url in self.endpoints:
             try:
+                # Automatic 500 error resilience with retries and exponential backoff
                 html = self.fetch_url(url, retries=2, backoff=1.5)
                 if not html:
                     continue
 
                 soup = BeautifulSoup(html, "html.parser")
-                # Look for table rows or lists of notices
                 for row in soup.find_all(["tr", "li"]):
                     text = row.get_text(separator=" ", strip=True)
                     if len(text) < 15:
@@ -41,9 +46,8 @@ class HPUOfficialScraper(BaseScraper):
                     full_url = urljoin(url, href)
                     title = link.get_text(strip=True) or text[:120]
 
-                    # Parse category & priority
                     is_breaking = any(w in text.lower() for w in [
-                        "holiday", "postponed", "cancelled", "snowfall", "flood", "closed", "emergency"
+                        "holiday", "postponed", "cancelled", "snowfall", "flood", "closed", "emergency", "strike"
                     ])
                     category = "GENERAL"
                     if "result" in text.lower():
@@ -55,13 +59,14 @@ class HPUOfficialScraper(BaseScraper):
                     elif "holiday" in text.lower() or "closure" in text.lower():
                         category = "HOLIDAY"
 
-                    # Extract date if present
                     date_match = re.search(r"\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4}", text)
                     notice_date = date_match.group(0) if date_match else None
 
+                    domain = "icdeolhpu.org" if "icdeol" in url else "hpuniv.ac.in"
                     items.append({
-                        "source": "hpuniv.ac.in",
-                        "title": title,
+                        "source": f"Official Portal ({domain})",
+                        "source_priority": 3,
+                        "title": title[:120],
                         "url": full_url,
                         "pdf_url": full_url if full_url.endswith(".pdf") else None,
                         "category": category,
@@ -72,7 +77,8 @@ class HPUOfficialScraper(BaseScraper):
                         "summary": text
                     })
             except Exception as e:
-                print(f"[HPUOfficialScraper] Warning on {url}: {e}")
+                # Resilience against intermittent server errors or 500 status from hpuniv.ac.in
+                print(f"[HPUOfficialScraper] Resilient fallback on {url}: {e}")
                 continue
 
         return items

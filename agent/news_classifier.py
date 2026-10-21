@@ -37,13 +37,25 @@ def classify_and_synthesize_update(item: Dict[str, Any]) -> Dict[str, Any]:
     raw_text = clean_text_no_urls(item.get("raw_text") or "")
     ocr_text = clean_text_no_urls(item.get("ocr_text") or "")
     notice_date = item.get("notice_date") or "Latest Update"
+    source = item.get("source") or "Portal"
+    is_instagram = "instagram" in source.lower()
+
+    ig_directive = ""
+    if is_instagram:
+        ig_directive = f"""
+NOTE: This update was posted by student community account '{source}'.
+Directly adapt and rephrase this update into our own original, authoritative voice for @hpu.pulse.
+Preserve the exact examination names, semesters, dates, and instructions, but express them in a crisp, clean student-friendly manner.
+DO NOT mention or credit any other Instagram page or source.
+"""
 
     prompt = f"""
 You are the student creator behind '@hpu.pulse', an authentic student community page like @hpuupdate.
 Rephrase and summarize this university update so it feels like a knowledgeable student admin posted it.
-
+{ig_directive}
 Notice Content:
 - Title: {title}
+- Source: {source}
 - Date: {notice_date}
 - Content: {raw_text[:600]}
 - Circular Details: {ocr_text[:600]}
