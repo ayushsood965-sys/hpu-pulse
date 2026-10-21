@@ -23,7 +23,10 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from agent.config import (
     OUTPUT_DIR,
+    CRAWL_INTERVAL_HOURS,
     CRAWL_INTERVAL_MINUTES,
+    POST_INTERVAL_HOURS,
+    MAX_DAILY_POSTS,
     ROUTINE_BATCH_INTERVAL_HOURS,
     TIMEZONE,
     DB_PATH,
@@ -34,10 +37,12 @@ from agent.scrapers import run_crawler_pipeline
 from agent.agent import (
     publish_breaking_reel_cycle,
     publish_routine_carousel_cycle,
+    run_automated_crawler_cycle,
+    execute_scheduled_publishing_cycle,
     run_automated_check_and_post_cycle
 )
 from agent.auto_commenter import process_comments
-from agent.db import init_db, purge_stale_pending_items
+from agent.db import init_db, purge_stale_pending_items, get_daily_published_count
 
 app = FastAPI(title="HPU Pulse — Autonomous Agent Control Center")
 
@@ -102,11 +107,17 @@ class StdoutLogInterceptor:
 sys.stdout = StdoutLogInterceptor(sys.stdout, default_level="INFO")
 sys.stderr = StdoutLogInterceptor(sys.stderr, default_level="ERROR")
 
-def safe_crawl_cycle(force_publish: bool = False):
+def safe_crawl_cycle():
     try:
-        run_automated_check_and_post_cycle(force_publish)
+        run_automated_crawler_cycle()
     except Exception as e:
-        log_event(f"❌ Automated Crawl & Post Cycle Failed: {e}", level="ERROR")
+        log_event(f"❌ 6-Hour Automated Crawler Failed: {e}", level="ERROR")
+
+def safe_scheduled_post_cycle(dry_run: bool = False):
+    try:
+        execute_scheduled_publishing_cycle(dry_run=dry_run)
+    except Exception as e:
+        log_event(f"❌ 12-Hour Scheduled Post Cycle Failed: {e}", level="ERROR")
 
 def safe_carousel_cycle(items=None, category=None, dry_run=False):
     try:
@@ -139,21 +150,21 @@ class AgentManager:
 
         self.scheduler = BackgroundScheduler(timezone=TIMEZONE)
 
-        # 1. Multi-source 30-min crawler & breaking news check
+        # 1. Multi-source crawler every 6 hours
         self.scheduler.add_job(
             safe_crawl_cycle,
-            trigger=IntervalTrigger(minutes=CRAWL_INTERVAL_MINUTES, timezone=TIMEZONE),
+            trigger=IntervalTrigger(hours=CRAWL_INTERVAL_HOURS, timezone=TIMEZONE),
             id="job_crawl_check",
-            name=f"Multi-Source Crawler (Every {CRAWL_INTERVAL_MINUTES}m)",
-            misfire_grace_time=120
+            name=f"Multi-Source Crawler (Every {CRAWL_INTERVAL_HOURS}h)",
+            misfire_grace_time=300
         )
 
-        # 2. Routine batch carousel worker
+        # 2. 12-Hour Scheduled Post Worker (Max 2 posts daily: 1-2 Reel, 3+ Carousel)
         self.scheduler.add_job(
-            safe_carousel_cycle,
-            trigger=IntervalTrigger(hours=ROUTINE_BATCH_INTERVAL_HOURS, timezone=TIMEZONE),
-            id="job_routine_batch",
-            name=f"Routine Carousel Worker (Every {ROUTINE_BATCH_INTERVAL_HOURS}h)",
+            safe_scheduled_post_cycle,
+            trigger=IntervalTrigger(hours=POST_INTERVAL_HOURS, timezone=TIMEZONE),
+            id="job_scheduled_post",
+            name=f"12-Hour Post Worker (Max {MAX_DAILY_POSTS}/day)",
             misfire_grace_time=300
         )
 
@@ -169,7 +180,7 @@ class AgentManager:
         self.scheduler.start()
         self.is_running = True
         self.last_action = "Agent Started"
-        log_event(f"✦ 24/7 Autonomous HPU News Agent Started (Crawl every {CRAWL_INTERVAL_MINUTES}m | Carousels every {ROUTINE_BATCH_INTERVAL_HOURS}h)")
+        log_event(f"✦ 24/7 Autonomous HPU News Agent Started (Crawl every {CRAWL_INTERVAL_HOURS}h | Posts every {POST_INTERVAL_HOURS}h | Max {MAX_DAILY_POSTS} posts daily)")
 
     def stop(self):
         if self.scheduler and self.scheduler.running:
@@ -332,6 +343,8 @@ def get_status(request: Request, authorization: Optional[str] = Header(None), hp
         except Exception:
             pass
 
+    daily_posts = get_daily_published_count()
+
     return {
         "status": "Running" if agent_manager.is_running else "Stopped",
         "is_running": agent_manager.is_running,
@@ -343,6 +356,10 @@ def get_status(request: Request, authorization: Optional[str] = Header(None), hp
         "published_count": published_count,
         "queued_count": queued_count,
         "replies_count": replies_count,
+        "daily_posts_count": daily_posts,
+        "max_daily_posts": MAX_DAILY_POSTS,
+        "crawl_interval_hours": CRAWL_INTERVAL_HOURS,
+        "post_interval_hours": POST_INTERVAL_HOURS,
         "next_jobs": next_jobs,
         "queued_items": queued_items,
         "recent_posts": recent_posts,

@@ -33,8 +33,11 @@ OPENROUTER_MODELS = [
 IMGBB_API_KEY = os.getenv("IMGBB_API_KEY", "").strip()
 SERVER_URL = os.getenv("SERVER_URL", "http://localhost:8000").rstrip("/")
 
-# Crawler & Scheduler
-CRAWL_INTERVAL_MINUTES = int(os.getenv("CRAWL_INTERVAL_MINUTES", "30"))
-ROUTINE_BATCH_INTERVAL_HOURS = float(os.getenv("ROUTINE_BATCH_INTERVAL_HOURS", "1.5"))
+# Crawler & Scheduler (6h crawl, 12h post, max 2 daily posts)
+CRAWL_INTERVAL_HOURS = int(os.getenv("CRAWL_INTERVAL_HOURS", "6"))
+CRAWL_INTERVAL_MINUTES = int(os.getenv("CRAWL_INTERVAL_MINUTES", str(CRAWL_INTERVAL_HOURS * 60)))
+POST_INTERVAL_HOURS = int(os.getenv("POST_INTERVAL_HOURS", "12"))
+MAX_DAILY_POSTS = int(os.getenv("MAX_DAILY_POSTS", "2"))
+ROUTINE_BATCH_INTERVAL_HOURS = float(os.getenv("ROUTINE_BATCH_INTERVAL_HOURS", "12"))
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Kolkata")
 DB_PATH = BASE_DIR / "agent_data.db"

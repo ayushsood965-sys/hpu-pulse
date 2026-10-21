@@ -9,7 +9,7 @@ if sys.stdout.encoding != 'utf-8':
     except Exception:
         pass
 
-from .config import INSTAGRAM_HANDLE
+from .config import INSTAGRAM_HANDLE, MAX_DAILY_POSTS
 from .scrapers import run_crawler_pipeline
 from .news_classifier import classify_and_synthesize_update, bundle_routine_carousels
 from .card_renderer import render_breaking_card, render_carousel_slides
@@ -19,6 +19,8 @@ from .poster import publish_to_instagram, publish_carousel_to_instagram, publish
 from .db import (
     get_pending_tier1_items,
     get_waiting_batch_items,
+    get_all_waiting_items,
+    get_daily_published_count,
     record_published_post,
     mark_items_published
 )
@@ -190,33 +192,51 @@ def publish_routine_carousel_cycle(items: Optional[List[Dict[str, Any]]] = None,
         "media_id": media_id
     }
 
-def run_automated_check_and_post_cycle(dry_run: bool = False) -> Dict[str, Any]:
+def run_automated_crawler_cycle() -> int:
     """
-    Called every 30 minutes by scheduler:
-    1. Runs multi-source crawler pipeline.
-    2. If any Tier 1 Breaking News was found, publishes immediately!
-    3. Checks batch queue: if enough items exist or batch interval elapsed, publishes Carousel.
+    Crawls university portals, newspaper sources, and student communities every 6 hours.
+    Deduplicates and indexes fresh notices into the database queue.
     """
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"\n[{timestamp}] 🕷️ RUNNING 6-HOUR MULTI-SOURCE CRAWLER PIPELINE...")
     new_items = run_crawler_pipeline()
+    print(f"  ✔ 6-Hour crawl finished: {len(new_items)} fresh updates indexed into queue.")
+    return len(new_items)
 
-    results = {
-        "crawled_new": len(new_items),
-        "published_reels": 0,
-        "published_carousels": 0
-    }
+def execute_scheduled_publishing_cycle(dry_run: bool = False) -> Optional[Dict[str, Any]]:
+    """
+    Executed every 12 hours (maximum 2 posts daily):
+    - Strict Daily Cap: Maximum 2 published posts per calendar day.
+    - If 1 to 2 updates in queue -> formats and publishes as a 9:16 LOOPING VIDEO REEL with audio.
+    - If multiple (3 or more) updates in queue -> formats and bundles into a categorized CAROUSEL ALBUM.
+    """
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    daily_count = get_daily_published_count()
 
-    # 1. Immediate Tier 1 Breaking Check
-    pending_tier1 = get_pending_tier1_items()
-    for item in pending_tier1:
-        res = publish_breaking_reel_cycle(item, dry_run=dry_run)
-        if res:
-            results["published_reels"] += 1
+    if daily_count >= MAX_DAILY_POSTS and not dry_run:
+        print(f"\n[{timestamp}] ⏸️ [Scheduler] Daily cap reached ({daily_count}/{MAX_DAILY_POSTS} posts published today). Skipping 12-hour window.")
+        return None
 
-    # 2. Tier 2 Carousel Batch Check
-    waiting_batch = get_waiting_batch_items()
-    if len(waiting_batch) >= 2:
-        res = publish_routine_carousel_cycle(items=waiting_batch[:4], dry_run=dry_run)
-        if res:
-            results["published_carousels"] += 1
+    waiting_items = get_all_waiting_items()
+    if not waiting_items:
+        print(f"\n[{timestamp}] 📭 [Scheduler] No pending updates in queue for this 12-hour publishing cycle.")
+        return None
 
-    return results
+    total_waiting = len(waiting_items)
+    print(f"\n[{timestamp}] ⏰ INITIATING 12-HOUR SCHEDULED POSTING CYCLE...")
+    print(f"  Current daily status: {daily_count}/{MAX_DAILY_POSTS} posts published today.")
+    print(f"  Queue contains {total_waiting} pending update(s).")
+
+    if total_waiting <= 2:
+        # User Mandate: 1-2 updates -> Looping video reel
+        chosen_item = waiting_items[0]
+        print(f"  ⚡ {total_waiting} update(s) detected (1-2 threshold) -> Publishing as LOOPING VIDEO REEL with background audio...")
+        return publish_breaking_reel_cycle(chosen_item, dry_run=dry_run)
+    else:
+        # User Mandate: Multiple (3+) updates -> Multi-slide carousel album
+        batch = waiting_items[:5]
+        print(f"  📚 {total_waiting} updates detected (Multiple threshold) -> Bundling {len(batch)} circulars into a CAROUSEL ALBUM...")
+        return publish_routine_carousel_cycle(items=batch, dry_run=dry_run)
+
+# Backward-compatibility alias
+run_automated_check_and_post_cycle = execute_scheduled_publishing_cycle

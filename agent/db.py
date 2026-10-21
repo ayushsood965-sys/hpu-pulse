@@ -353,5 +353,30 @@ def record_comment_reply(comment_id: str, post_id: str, username: str, comment_t
     conn.commit()
     conn.close()
 
+def get_daily_published_count() -> int:
+    """Returns the number of posts published today (calendar day in Asia/Kolkata)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    cursor.execute("""
+        SELECT count(*) FROM published_posts 
+        WHERE published_at LIKE ? OR date(published_at) = date('now')
+    """, (f"{today_str}%",))
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count
+
+def get_all_waiting_items() -> List[Dict[str, Any]]:
+    """Returns all fresh waiting circulars/updates ordered by priority and freshness."""
+    p1 = get_pending_tier1_items()
+    p2 = get_waiting_batch_items()
+    seen_ids = set()
+    combined = []
+    for item in p1 + p2:
+        if item["id"] not in seen_ids:
+            seen_ids.add(item["id"])
+            combined.append(item)
+    return combined
+
 # Auto-initialize tables
 init_db()
