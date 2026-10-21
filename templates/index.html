@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HPU Pulse — 24/7 Autonomous Control Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #060B0E;
+      --surface: rgba(13, 23, 28, 0.85);
+      --surface-elevated: rgba(18, 32, 40, 0.95);
+      --border: rgba(46, 117, 75, 0.28);
+      --border-hover: rgba(58, 154, 98, 0.55);
+      --mint: #38DF7B;
+      --mint-glow: rgba(56, 223, 123, 0.25);
+      --sage: #28724F;
+      --text: #F3F9F5;
+      --text-muted: #8FA699;
+      --danger: #FF4D4D;
+      --warning: #F59E0B;
+      --info: #38BDF8;
+      --card-radius: 16px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(circle at 10% 10%, rgba(56, 223, 123, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 90% 90%, rgba(40, 114, 79, 0.06) 0%, transparent 45%);
+      color: var(--text);
+      font-family: 'Outfit', sans-serif;
+      min-height: 100vh;
+      padding: 24px 20px 60px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 1360px;
+      margin: 0 auto;
+    }
+
+    /* Auth Overlay */
+    #auth-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(6, 11, 14, 0.94);
+      backdrop-filter: blur(16px);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      transition: opacity 0.4s ease, visibility 0.4s ease;
+    }
+
+    #auth-overlay.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .login-box {
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px var(--mint-glow);
+      border-radius: 20px;
+      padding: 40px;
+      width: 100%;
+      max-width: 440px;
+      text-align: center;
+      position: relative;
+      animation: modalSlide 0.3s ease-out;
+    }
+
+    @keyframes modalSlide {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .lock-icon {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: rgba(56, 223, 123, 0.12);
+      border: 1px solid var(--mint);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      margin-bottom: 20px;
+      color: var(--mint);
+      box-shadow: 0 0 20px var(--mint-glow);
+    }
+
+    .login-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #FFF 0%, var(--mint) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .login-sub {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+
+    .password-input {
+      width: 100%;
+      padding: 14px 18px;
+      background: rgba(6, 11, 14, 0.7);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: #FFF;
+      font-size: 16px;
+      font-family: inherit;
+      outline: none;
+      transition: all 0.25s ease;
+      margin-bottom: 16px;
+    }
+
+    .password-input:focus {
+      border-color: var(--mint);
+      box-shadow: 0 0 16px var(--mint-glow);
+    }
+
+    .btn-login {
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--mint) 0%, var(--sage) 100%);
+      border: none;
+      color: #060B0E;
+      font-weight: 700;
+      font-size: 15px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+
+    .btn-login:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px var(--mint-glow);
+    }
+
+    .login-error {
+      color: var(--danger);
+      font-size: 13px;
+      margin-top: 12px;
+      min-height: 18px;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 30px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .brand-icon {
+      width: 48px;
+      height: 48px;
+      background: rgba(56, 223, 123, 0.12);
+      border: 1px solid var(--mint);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+    }
+
+    .brand-title {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #FFF 0%, var(--mint) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      background: rgba(56, 223, 123, 0.12);
+      border: 1px solid rgba(56, 223, 123, 0.4);
+      color: var(--mint);
+      box-shadow: 0 0 16px var(--mint-glow);
+    }
+
+    .status-badge.stopped {
+      background: rgba(255, 77, 77, 0.12);
+      border-color: rgba(255, 77, 77, 0.4);
+      color: var(--danger);
+      box-shadow: 0 0 16px rgba(255, 77, 77, 0.2);
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 1; }
+      50% { transform: scale(1.4); opacity: 0.5; }
+      100% { transform: scale(0.9); opacity: 1; }
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 18px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+      font-family: inherit;
+      color: #FFF;
+      background: var(--surface-elevated);
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    }
+
+    .btn-restart {
+      border-color: rgba(56, 189, 248, 0.4);
+      color: var(--info);
+    }
+    .btn-restart:hover { background: rgba(56, 189, 248, 0.15); }
+
+    .btn-stop {
+      border-color: rgba(255, 77, 77, 0.4);
+      color: var(--danger);
+    }
+    .btn-stop:hover { background: rgba(255, 77, 77, 0.15); }
+
+    .btn-start {
+      border-color: rgba(56, 223, 123, 0.4);
+      color: var(--mint);
+    }
+    .btn-start:hover { background: rgba(56, 223, 123, 0.15); }
+
+    .btn-logout {
+      border-color: rgba(255, 255, 255, 0.15);
+      color: var(--text-muted);
+    }
+
+    /* Grid Stats */
+    .grid-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--card-radius);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.25s ease;
+      backdrop-filter: blur(10px);
+    }
+
+    .stat-card:hover {
+      border-color: var(--border-hover);
+      transform: translateY(-2px);
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 6px;
+    }
+
+    .stat-val {
+      font-size: 28px;
+      font-weight: 800;
+      color: #FFF;
+      letter-spacing: -0.5px;
+    }
+
+    .stat-val.uptime {
+      font-size: 21px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--mint);
+    }
+
+    .stat-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Action Toolbar */
+    .action-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--card-radius);
+      padding: 22px;
+      margin-bottom: 28px;
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .action-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+    }
+
+    .action-btn {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px;
+      border-radius: 12px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      color: #FFF;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.25s ease;
+      font-family: inherit;
+    }
+
+    .action-btn:hover {
+      border-color: var(--mint);
+      background: rgba(56, 223, 123, 0.08);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    }
+
+    .action-icon {
+      font-size: 24px;
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .action-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+
+    .action-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Main Grid Split */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 1080px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Terminal Console */
+    .terminal-card {
+      background: #040709;
+      border: 1px solid var(--border);
+      border-radius: var(--card-radius);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      height: 520px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+
+    .terminal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .terminal-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--mint);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .terminal-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .terminal-body {
+      flex: 1;
+      overflow-y: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #D1D5DB;
+      padding-right: 8px;
+    }
+
+    .terminal-body::-webkit-scrollbar {
+      width: 6px;
+    }
+    .terminal-body::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
+
+    .log-line {
+      margin-bottom: 4px;
+      word-break: break-all;
+    }
+
+    .log-ts { color: #64748B; margin-right: 6px; }
+    .log-level-INFO { color: var(--info); font-weight: 600; margin-right: 6px; }
+    .log-level-WARN { color: var(--warning); font-weight: 600; margin-right: 6px; }
+    .log-level-ERROR { color: var(--danger); font-weight: 600; margin-right: 6px; }
+
+    /* Tables & Queue */
+    .side-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--card-radius);
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+
+    .queue-list {
+      max-height: 240px;
+      overflow-y: auto;
+    }
+
+    .queue-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: var(--surface-elevated);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+
+    .queue-cat {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(56, 223, 123, 0.15);
+      color: var(--mint);
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+
+    .queue-title {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+    }
+
+    /* History Feed */
+    .history-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      background: var(--surface-elevated);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      transition: all 0.2s ease;
+    }
+
+    .history-item:hover {
+      background: rgba(56, 223, 123, 0.06);
+    }
+
+    .history-link {
+      color: var(--mint);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .history-link:hover {
+      text-decoration: underline;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 14px 22px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--mint);
+      border-radius: 12px;
+      color: #FFF;
+      font-weight: 600;
+      font-size: 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6), 0 0 15px var(--mint-glow);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s ease;
+      z-index: 10000;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Password Protected Lock Screen -->
+  <div id="auth-overlay">
+    <div class="login-box">
+      <div class="lock-icon">🔒</div>
+      <h2 class="login-title">HPU Pulse Admin</h2>
+      <p class="login-sub">24/7 Autonomous News Agent Control Center</p>
+      <input type="password" id="admin-pass" class="password-input" placeholder="Enter Access Password..." autofocus>
+      <button class="btn-login" id="btn-submit-pass" onclick="handleLogin()">Unlock Control Center</button>
+      <div class="login-error" id="login-error"></div>
+    </div>
+  </div>
+
+  <div class="container" id="dashboard-content">
+    <header>
+      <div class="brand">
+        <div class="brand-icon">🏛</div>
+        <div>
+          <h1 class="brand-title">HPU Pulse</h1>
+          <div class="brand-sub">Autonomous Student News & Circulars Agent • @hpu.pulse</div>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="status-badge" id="agent-status-badge">
+          <div class="pulse-dot"></div>
+          <span id="status-text">INITIALIZING...</span>
+        </div>
+
+        <button class="btn btn-restart" onclick="triggerAction('/api/restart', 'Restarting Agent...')">
+          🔄 Restart
+        </button>
+        <button class="btn btn-stop" id="btn-toggle-agent" onclick="toggleAgent()">
+          🛑 Stop
+        </button>
+        <button class="btn btn-logout" onclick="handleLogout()">
+          🔓 Logout
+        </button>
+      </div>
+    </header>
+
+    <!-- Metrics Grid -->
+    <div class="grid-stats">
+      <div class="stat-card">
+        <div class="stat-label">System Uptime</div>
+        <div class="stat-val uptime" id="metric-uptime">00:00:00</div>
+        <div class="stat-sub" id="metric-last-action">Agent Active</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Indexed Circulars</div>
+        <div class="stat-val" id="metric-indexed">0</div>
+        <div class="stat-sub">From HPU Portals & RSS</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Batch Queue</div>
+        <div class="stat-val" id="metric-queued" style="color: var(--mint);">0</div>
+        <div class="stat-sub">Waiting for Next Carousel</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Published Posts</div>
+        <div class="stat-val" id="metric-published">0</div>
+        <div class="stat-sub">Live on Instagram</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Comment Replies</div>
+        <div class="stat-val" id="metric-replies">0</div>
+        <div class="stat-sub">Autonomous Student Support</div>
+      </div>
+    </div>
+
+    <!-- Quick Action Controls -->
+    <div class="action-panel">
+      <div class="section-title">⚡ Instant Workflow Triggers</div>
+      <div class="action-grid">
+        <div class="action-btn" onclick="triggerAction('/api/crawl-now', 'Multi-Source Crawl Started!')">
+          <div class="action-icon">🕷</div>
+          <div>
+            <div class="action-title">Run 30-Min Crawl</div>
+            <div class="action-desc">Scan nexams, nadmissions & RSS</div>
+          </div>
+        </div>
+
+        <div class="action-btn" onclick="triggerAction('/api/publish-carousel-now', 'Routine Carousel Publishing...')">
+          <div class="action-icon">📚</div>
+          <div>
+            <div class="action-title">Publish Carousel Batch</div>
+            <div class="action-desc">Bundle waiting circulars into album</div>
+          </div>
+        </div>
+
+        <div class="action-btn" onclick="triggerAction('/api/publish-reel-now', 'Generating 9:16 Looping Reel...')">
+          <div class="action-icon">🎬</div>
+          <div>
+            <div class="action-title">Publish Breaking Reel</div>
+            <div class="action-desc">Render 9:16 vertical video + audio</div>
+          </div>
+        </div>
+
+        <div class="action-btn" onclick="triggerAction('/api/scan-comments', 'Comment Responder Running...')">
+          <div class="action-icon">💬</div>
+          <div>
+            <div class="action-title">Scan & Reply Comments</div>
+            <div class="action-desc">Resolve student inquiries via AI</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Split Section -->
+    <div class="dashboard-grid">
+      <!-- Live Log Terminal -->
+      <div class="terminal-card">
+        <div class="terminal-header">
+          <div class="terminal-title">
+            <span>●</span> LIVE AGENT STDOUT STREAM
+          </div>
+          <div class="terminal-actions">
+            <button class="btn btn-logout" style="padding: 4px 10px; font-size: 11px;" onclick="triggerAction('/api/clear-logs', 'Logs Cleared')">Clear</button>
+          </div>
+        </div>
+        <div class="terminal-body" id="terminal-body">
+          <div class="log-line"><span class="log-ts">--:--:--</span> Connecting to live log buffer...</div>
+        </div>
+      </div>
+
+      <!-- Right Column: Queue & History -->
+      <div>
+        <!-- Waiting Queue Card -->
+        <div class="side-card">
+          <div class="section-title">⏳ Waiting Batch Queue (<span id="queue-count-badge">0</span>)</div>
+          <div class="queue-list" id="queue-list">
+            <div style="color: var(--text-muted); font-size: 13px;">No items waiting in batch queue.</div>
+          </div>
+        </div>
+
+        <!-- Recent Published Posts -->
+        <div class="side-card">
+          <div class="section-title">🚀 Recent Published Posts</div>
+          <div id="history-list">
+            <div style="color: var(--text-muted); font-size: 13px;">No posts recorded yet.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">Action dispatched</div>
+
+  <script>
+    let authToken = localStorage.getItem("hpu_auth_token") || "";
+    let isAgentRunning = true;
+
+    // Enter key support for login
+    document.getElementById("admin-pass").addEventListener("keydown", function(e) {
+      if (e.key === "Enter") handleLogin();
+    });
+
+    async function checkAuthOnLoad() {
+      if (!authToken) {
+        showAuthModal();
+        return;
+      }
+      try {
+        const res = await fetch("/api/auth/check", {
+          headers: { "Authorization": `Bearer ${authToken}` }
+        });
+        const data = await res.json();
+        if (data.authenticated) {
+          hideAuthModal();
+          startDataPolling();
+        } else {
+          showAuthModal();
+        }
+      } catch (err) {
+        showAuthModal();
+      }
+    }
+
+    function showAuthModal() {
+      document.getElementById("auth-overlay").classList.remove("hidden");
+      document.getElementById("admin-pass").focus();
+    }
+
+    function hideAuthModal() {
+      document.getElementById("auth-overlay").classList.add("hidden");
+    }
+
+    async function handleLogin() {
+      const pass = document.getElementById("admin-pass").value;
+      const errBox = document.getElementById("login-error");
+      errBox.innerText = "";
+
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: pass })
+        });
+        const data = await res.json();
+        if (data.success && data.token) {
+          authToken = data.token;
+          localStorage.setItem("hpu_auth_token", authToken);
+          hideAuthModal();
+          showToast("Welcome to HPU Pulse Control Center");
+          startDataPolling();
+        } else {
+          errBox.innerText = data.error || "Incorrect password";
+        }
+      } catch (err) {
+        errBox.innerText = "Error connecting to server";
+      }
+    }
+
+    async function handleLogout() {
+      await fetch("/api/auth/logout", { method: "POST" });
+      localStorage.removeItem("hpu_auth_token");
+      authToken = "";
+      location.reload();
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById("toast");
+      toast.innerText = msg;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 3500);
+    }
+
+    async function triggerAction(endpoint, successMsg) {
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${authToken}` }
+        });
+        if (res.status === 401) {
+          showAuthModal();
+          return;
+        }
+        const data = await res.json();
+        showToast(successMsg || data.message || "Executed");
+        fetchStatus();
+      } catch (err) {
+        showToast("Request failed");
+      }
+    }
+
+    async function toggleAgent() {
+      if (isAgentRunning) {
+        await triggerAction("/api/stop", "Agent Stopped");
+      } else {
+        await triggerAction("/api/start", "Agent Started");
+      }
+    }
+
+    async function fetchStatus() {
+      if (!authToken) return;
+      try {
+        const res = await fetch("/api/status", {
+          headers: { "Authorization": `Bearer ${authToken}` }
+        });
+        if (res.status === 401) {
+          showAuthModal();
+          return;
+        }
+        const data = await res.json();
+        updateUI(data);
+      } catch (err) {
+        console.error("Status fetch error", err);
+      }
+    }
+
+    function updateUI(data) {
+      isAgentRunning = data.is_running;
+      const statusBadge = document.getElementById("agent-status-badge");
+      const statusText = document.getElementById("status-text");
+      const toggleBtn = document.getElementById("btn-toggle-agent");
+
+      if (data.is_running) {
+        statusBadge.className = "status-badge";
+        statusText.innerText = "24/7 AUTONOMOUS ONLINE";
+        toggleBtn.className = "btn btn-stop";
+        toggleBtn.innerText = "🛑 Stop";
+      } else {
+        statusBadge.className = "status-badge stopped";
+        statusText.innerText = "PAUSED BY ADMIN";
+        toggleBtn.className = "btn btn-start";
+        toggleBtn.innerText = "▶ Start";
+      }
+
+      document.getElementById("metric-uptime").innerText = data.uptime || "0s";
+      document.getElementById("metric-last-action").innerText = data.last_action || "Idle";
+      document.getElementById("metric-indexed").innerText = data.total_indexed || 0;
+      document.getElementById("metric-queued").innerText = data.queued_count || 0;
+      document.getElementById("metric-published").innerText = data.published_count || 0;
+      document.getElementById("metric-replies").innerText = data.replies_count || 0;
+      document.getElementById("queue-count-badge").innerText = data.queued_count || 0;
+
+      // Render Logs
+      const terminal = document.getElementById("terminal-body");
+      if (data.logs && data.logs.length > 0) {
+        terminal.innerHTML = data.logs.map(l => `
+          <div class="log-line">
+            <span class="log-ts">[${l.timestamp.split(" ")[1]}]</span>
+            <span class="log-level-${l.level}">[${l.level}]</span>
+            <span>${escapeHtml(l.message)}</span>
+          </div>
+        `).join("");
+        terminal.scrollTop = terminal.scrollHeight;
+      }
+
+      // Render Queue
+      const queueList = document.getElementById("queue-list");
+      if (data.queued_items && data.queued_items.length > 0) {
+        queueList.innerHTML = data.queued_items.slice(0, 8).map(q => `
+          <div class="queue-item">
+            <span class="queue-cat">${escapeHtml(q.category)}</span>
+            <span class="queue-title" title="${escapeHtml(q.title)}">${escapeHtml(q.title)}</span>
+          </div>
+        `).join("");
+      } else {
+        queueList.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">No items waiting in batch queue.</div>';
+      }
+
+      // Render History
+      const histList = document.getElementById("history-list");
+      if (data.recent_posts && data.recent_posts.length > 0) {
+        histList.innerHTML = data.recent_posts.slice(0, 5).map(p => `
+          <div class="history-item">
+            <div>
+              <div style="font-weight: 700; font-size: 13px;">${escapeHtml(p.headline)}</div>
+              <div style="font-size: 11px; color: var(--text-muted);">${p.post_type} • ${p.published_at}</div>
+            </div>
+            ${p.url !== '#' ? `<a href="${p.url}" target="_blank" class="history-link">View IG ↗</a>` : '<span style="font-size: 11px; color: var(--text-muted);">Dry Run</span>'}
+          </div>
+        `).join("");
+      } else {
+        histList.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">No posts published yet.</div>';
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return "";
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function startDataPolling() {
+      fetchStatus();
+      setInterval(fetchStatus, 3000);
+    }
+
+    // Init
+    checkAuthOnLoad();
+  </script>
+</body>
+</html>

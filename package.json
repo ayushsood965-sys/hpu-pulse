@@ -1,0 +1,13 @@
+{
+  "name": "hpu-bot",
+  "version": "1.0.0",
+  "description": "Autonomous Instagram News and Updates Agent for Himachal Pradesh University (HPU Shimla)",
+  "type": "module",
+  "scripts": {
+    "start": "node agent/poster.mjs"
+  },
+  "dependencies": {
+    "@mcpware/instagram-mcp": "^1.0.4",
+    "dotenv": "^18.0.8"
+  }
+}
