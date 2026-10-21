@@ -39,6 +39,27 @@ def check_rate_limit_and_throttle(is_emergency: bool = False):
 
     LAST_PUBLISH_TIME = time.time()
 
+def _parse_meta_error(result: subprocess.CompletedProcess) -> str:
+    """Parses node/Meta output into a clean, actionable error message."""
+    raw = (result.stderr or "").strip() or (result.stdout or "").strip()
+    try:
+        first_brace = raw.find("{")
+        last_brace = raw.rfind("}")
+        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+            data = json.loads(raw[first_brace:last_brace + 1])
+            if "error" in data:
+                raw = str(data["error"])
+    except Exception:
+        pass
+
+    if any(k in raw for k in ["Session has expired", "Cannot call API for app", "Error validating access token", "OAuthException"]):
+        return (
+            "Meta Instagram Access Token has EXPIRED or lacks permission! "
+            f"(Meta Error: {raw}). "
+            "Please generate a fresh User/Page Access Token from Meta Graph API Explorer and update INSTAGRAM_ACCESS_TOKEN."
+        )
+    return raw
+
 def publish_to_instagram(image_url: str, caption: str, is_emergency: bool = False) -> str:
     """Publishes a single image card."""
     if not is_credentials_ready():
@@ -55,7 +76,7 @@ def publish_to_instagram(image_url: str, caption: str, is_emergency: bool = Fals
     result = subprocess.run(cmd, capture_output=True, text=True, env=env)
 
     if result.returncode != 0:
-        error_msg = result.stderr.strip() or result.stdout.strip()
+        error_msg = _parse_meta_error(result)
         raise RuntimeError(f"Instagram publishing error: {error_msg}")
 
     data = json.loads(result.stdout.strip())
@@ -79,7 +100,7 @@ def publish_carousel_to_instagram(image_urls: List[str], caption: str, is_emerge
     result = subprocess.run(cmd, capture_output=True, text=True, env=env)
 
     if result.returncode != 0:
-        error_msg = result.stderr.strip() or result.stdout.strip()
+        error_msg = _parse_meta_error(result)
         raise RuntimeError(f"Instagram Carousel publishing error: {error_msg}")
 
     data = json.loads(result.stdout.strip())
@@ -103,7 +124,7 @@ def publish_reel_to_instagram(video_url: str, caption: str, audio_name: str = ""
     result = subprocess.run(cmd, capture_output=True, text=True, env=env)
 
     if result.returncode != 0:
-        error_msg = result.stderr.strip() or result.stdout.strip()
+        error_msg = _parse_meta_error(result)
         raise RuntimeError(f"Instagram Reel publishing error: {error_msg}")
 
     data = json.loads(result.stdout.strip())

@@ -690,6 +690,14 @@
             <div class="action-desc">Resolve student inquiries via AI</div>
           </div>
         </div>
+
+        <div class="action-btn" onclick="openTokenModal()">
+          <div class="action-icon">🔑</div>
+          <div>
+            <div class="action-title">Update Meta Token</div>
+            <div class="action-desc">Paste fresh Access Token</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -941,8 +949,64 @@
       setInterval(fetchStatus, 3000);
     }
 
+    function openTokenModal() {
+      document.getElementById("token-modal").style.display = "flex";
+      document.getElementById("modal-token-input").focus();
+    }
+    function closeTokenModal() {
+      document.getElementById("token-modal").style.display = "none";
+    }
+    async function submitNewToken() {
+      const val = document.getElementById("modal-token-input").value.trim();
+      if (!val) {
+        showToast("Please paste a valid token!");
+        return;
+      }
+      try {
+        const res = await fetch("/api/settings/update-instagram-token", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`
+          },
+          body: JSON.stringify({ token: val })
+        });
+        const d = await res.json();
+        if (d.success) {
+          showToast("Token updated & active!");
+          closeTokenModal();
+          fetchStatus();
+        } else {
+          showToast(d.error || "Update failed");
+        }
+      } catch (err) {
+        showToast("Token update failed");
+      }
+    }
+
     // Init
     checkAuthOnLoad();
   </script>
+
+  <!-- Token Update Modal -->
+  <div id="token-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(6,11,14,0.92); backdrop-filter: blur(12px); z-index: 99999; align-items: center; justify-content: center; padding: 20px;">
+    <div style="background: var(--surface-elevated); border: 1px solid var(--border); border-radius: 20px; padding: 32px; max-width: 540px; width: 100%; box-shadow: 0 20px 50px rgba(0,0,0,0.7);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 20px; font-weight: 700;">🔑 Update Meta Instagram Token</h3>
+        <button onclick="closeTokenModal()" style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+      </div>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5;">
+        Paste your freshly generated 60-day or system user access token from the Meta Graph API Explorer. This will immediately update the running agent and persist to Coolify.
+      </p>
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--mint); margin-bottom: 6px;">INSTAGRAM ACCESS TOKEN</label>
+        <textarea id="modal-token-input" rows="4" style="width: 100%; padding: 12px; background: rgba(6,11,14,0.8); border: 1px solid var(--border); border-radius: 10px; color: #FFF; font-family: 'JetBrains Mono', monospace; font-size: 12px; resize: vertical;" placeholder="Paste EAA... token here"></textarea>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 12px;">
+        <button onclick="closeTokenModal()" class="btn" style="background: rgba(255,255,255,0.08); color: var(--text-muted);">Cancel</button>
+        <button onclick="submitNewToken()" class="btn btn-start" style="padding: 10px 22px;">Save & Apply Token</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

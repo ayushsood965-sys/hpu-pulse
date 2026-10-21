@@ -76,15 +76,20 @@ def publish_breaking_reel_cycle(item: Optional[Dict[str, Any]] = None, dry_run: 
         media_id = f"dry_run_reel_{int(time.time())}"
         print(f"  [DRY RUN] Reel generated successfully (Skipped IG publish).")
     else:
-        media_id = publish_reel_to_instagram(video_url, caption, audio_name=audio_name, is_emergency=True)
-        print(f"  ✔ BREAKING REEL PUBLISHED TO INSTAGRAM! Media ID: {media_id}")
+        print(f"  Sending video reel to Meta Instagram Graph API...")
+        try:
+            media_id = publish_reel_to_instagram(video_url, caption, audio_name=audio_name, is_emergency=True)
+            print(f"  ✔ BREAKING REEL PUBLISHED TO INSTAGRAM! Media ID: {media_id}")
 
-        # Post friendly student comment
-        first_comment = (
-            "Drop your questions or branch/semester in the comments below! 👇\n"
-            "Save this post so you don't miss any upcoming dates."
-        )
-        post_first_comment(media_id, first_comment)
+            # Post friendly student comment
+            first_comment = (
+                "Drop your questions or branch/semester in the comments below! 👇\n"
+                "Save this post so you don't miss any upcoming dates."
+            )
+            post_first_comment(media_id, first_comment)
+        except Exception as e:
+            print(f"  ❌ Instagram Reel Publish Failed: {e}")
+            raise e
 
     # Record in DB
     record_published_post(
@@ -136,10 +141,12 @@ def publish_routine_carousel_cycle(items: Optional[List[Dict[str, Any]]] = None,
     print(f"  ✔ Rendered {len(slide_paths)} carousel slides.")
 
     # Step 3: Upload slides
+    print(f"  Hosting {len(slide_paths)} slides for Instagram ingestion...")
     image_urls = []
-    for spath in slide_paths:
+    for idx, spath in enumerate(slide_paths, start=1):
         url = upload_image(spath)
         image_urls.append(url)
+        print(f"  ✔ Slide {idx}/{len(slide_paths)} uploaded: {url}")
         time.sleep(0.5)
 
     # Step 4: Publish Carousel
@@ -147,15 +154,20 @@ def publish_routine_carousel_cycle(items: Optional[List[Dict[str, Any]]] = None,
         media_id = f"dry_run_carousel_{int(time.time())}"
         print(f"  [DRY RUN] Carousel generated successfully with {len(image_urls)} slides.")
     else:
-        media_id = publish_carousel_to_instagram(image_urls, caption, is_emergency=False)
-        print(f"  ✔ CAROUSEL PUBLISHED TO INSTAGRAM! Media ID: {media_id}")
+        print(f"  Sending multi-slide container to Meta Instagram Graph API...")
+        try:
+            media_id = publish_carousel_to_instagram(image_urls, caption, is_emergency=False)
+            print(f"  ✔ CAROUSEL PUBLISHED TO INSTAGRAM! Media ID: {media_id}")
 
-        # Post first student prompt comment
-        comment_text = (
-            "Drop your course and semester below if you have any questions! 💬\n"
-            "Save this post & share with your classmates."
-        )
-        post_first_comment(media_id, comment_text)
+            # Post first student prompt comment
+            comment_text = (
+                "Drop your course and semester below if you have any questions! 💬\n"
+                "Save this post & share with your classmates."
+            )
+            post_first_comment(media_id, comment_text)
+        except Exception as e:
+            print(f"  ❌ Instagram Carousel Publish Failed: {e}")
+            raise e
 
     # Record in DB
     record_published_post(

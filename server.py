@@ -68,8 +68,9 @@ def log_event(message: str, level: str = "INFO"):
         pass
 
 class StdoutLogInterceptor:
-    def __init__(self, original):
+    def __init__(self, original, default_level="INFO"):
         self.original = original
+        self.default_level = default_level
         self.buffer = ""
 
     def write(self, s):
@@ -83,7 +84,10 @@ class StdoutLogInterceptor:
             line, self.buffer = self.buffer.split("\n", 1)
             line = line.strip()
             if line and not line.startswith("["):
-                lvl = "ERROR" if any(x in line.lower() for x in ["error", "fail", "exception"]) else ("WARN" if "warn" in line.lower() else "INFO")
+                if self.default_level == "ERROR":
+                    lvl = "ERROR"
+                else:
+                    lvl = "ERROR" if any(x in line.lower() for x in ["error", "fail", "exception", "traceback"]) else ("WARN" if "warn" in line.lower() else "INFO")
                 ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 system_logs.append({"timestamp": ts, "message": line, "level": lvl})
                 if len(system_logs) > MAX_LOGS:
@@ -95,7 +99,32 @@ class StdoutLogInterceptor:
         except Exception:
             pass
 
-sys.stdout = StdoutLogInterceptor(sys.stdout)
+sys.stdout = StdoutLogInterceptor(sys.stdout, default_level="INFO")
+sys.stderr = StdoutLogInterceptor(sys.stderr, default_level="ERROR")
+
+def safe_crawl_cycle(force_publish: bool = False):
+    try:
+        run_automated_check_and_post_cycle(force_publish)
+    except Exception as e:
+        log_event(f"❌ Automated Crawl & Post Cycle Failed: {e}", level="ERROR")
+
+def safe_carousel_cycle(items=None, category=None, dry_run=False):
+    try:
+        publish_routine_carousel_cycle(items, category, dry_run)
+    except Exception as e:
+        log_event(f"❌ Routine Carousel Publish Failed: {e}", level="ERROR")
+
+def safe_reel_cycle(item=None, dry_run=False):
+    try:
+        publish_breaking_reel_cycle(item, dry_run)
+    except Exception as e:
+        log_event(f"❌ Breaking Reel Publish Failed: {e}", level="ERROR")
+
+def safe_comments_cycle():
+    try:
+        process_comments()
+    except Exception as e:
+        log_event(f"❌ Comment Responder Failed: {e}", level="ERROR")
 
 class AgentManager:
     def __init__(self):
@@ -112,7 +141,7 @@ class AgentManager:
 
         # 1. Multi-source 30-min crawler & breaking news check
         self.scheduler.add_job(
-            run_automated_check_and_post_cycle,
+            safe_crawl_cycle,
             trigger=IntervalTrigger(minutes=CRAWL_INTERVAL_MINUTES, timezone=TIMEZONE),
             id="job_crawl_check",
             name=f"Multi-Source Crawler (Every {CRAWL_INTERVAL_MINUTES}m)",
@@ -121,7 +150,7 @@ class AgentManager:
 
         # 2. Routine batch carousel worker
         self.scheduler.add_job(
-            publish_routine_carousel_cycle,
+            safe_carousel_cycle,
             trigger=IntervalTrigger(hours=ROUTINE_BATCH_INTERVAL_HOURS, timezone=TIMEZONE),
             id="job_routine_batch",
             name=f"Routine Carousel Worker (Every {ROUTINE_BATCH_INTERVAL_HOURS}h)",
@@ -130,7 +159,7 @@ class AgentManager:
 
         # 3. Instagram comment auto-responder
         self.scheduler.add_job(
-            process_comments,
+            safe_comments_cycle,
             trigger=IntervalTrigger(minutes=30, timezone=TIMEZONE),
             id="job_comments",
             name="Instagram Comment Auto-Responder",
@@ -342,12 +371,66 @@ def restart_scheduler_api(request: Request, authorization: Optional[str] = Heade
     agent_manager.restart()
     return {"message": "Agent Background Scheduler Restarted"}
 
+class TokenUpdateRequest(BaseModel):
+    token: str
+    account_id: Optional[str] = None
+
+@app.post("/api/settings/update-instagram-token")
+def update_instagram_token(req: TokenUpdateRequest, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+
+    new_token = req.token.strip()
+    if not new_token:
+        return JSONResponse(status_code=400, content={"error": "Token cannot be empty"})
+
+    import agent.config as cfg
+    import agent.poster as pst
+    cfg.INSTAGRAM_ACCESS_TOKEN = new_token
+    pst.INSTAGRAM_ACCESS_TOKEN = new_token
+    os.environ["INSTAGRAM_ACCESS_TOKEN"] = new_token
+
+    if req.account_id and req.account_id.strip():
+        cfg.INSTAGRAM_ACCOUNT_ID = req.account_id.strip()
+        pst.INSTAGRAM_ACCOUNT_ID = req.account_id.strip()
+        os.environ["INSTAGRAM_ACCOUNT_ID"] = req.account_id.strip()
+
+    # Update local .env
+    env_file = Path(__file__).resolve().parent / ".env"
+    if env_file.exists():
+        content = env_file.read_text(encoding="utf-8")
+        if "INSTAGRAM_ACCESS_TOKEN=" in content:
+            content = re.sub(r'INSTAGRAM_ACCESS_TOKEN=.*', f'INSTAGRAM_ACCESS_TOKEN={new_token}', content)
+        else:
+            content += f"\nINSTAGRAM_ACCESS_TOKEN={new_token}\n"
+        if req.account_id and req.account_id.strip():
+            if "INSTAGRAM_ACCOUNT_ID=" in content:
+                content = re.sub(r'INSTAGRAM_ACCOUNT_ID=.*', f'INSTAGRAM_ACCOUNT_ID={req.account_id.strip()}', content)
+            else:
+                content += f"\nINSTAGRAM_ACCOUNT_ID={req.account_id.strip()}\n"
+        env_file.write_text(content, encoding="utf-8")
+
+    # Sync to Coolify API
+    coolify_token = "10|NFtP1Hcm6ltyrzQOvEfWZzcZFVDmRUKpKI7yQlUB"
+    try:
+        import requests
+        headers = {"Authorization": f"Bearer {coolify_token}"}
+        url = "http://169.58.12.127:8000/api/v1/applications/cqcddy6kofhetzhaicfwo9xc/envs"
+        requests.patch(url, headers=headers, json={"key": "INSTAGRAM_ACCESS_TOKEN", "value": new_token}, timeout=5)
+        if req.account_id and req.account_id.strip():
+            requests.patch(url, headers=headers, json={"key": "INSTAGRAM_ACCOUNT_ID", "value": req.account_id.strip()}, timeout=5)
+    except Exception as e:
+        print(f"[Coolify Sync] Env sync note: {e}")
+
+    log_event("🔑 INSTAGRAM_ACCESS_TOKEN updated successfully by Admin!", level="INFO")
+    return {"success": True, "message": "Instagram Access Token updated and active!"}
+
 @app.post("/api/crawl-now")
 def trigger_crawl(background_tasks: BackgroundTasks, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
     if not verify_auth(request, authorization, hpu_auth_session):
         return JSONResponse(status_code=401, content={"error": "Unauthorized"})
     log_event("⚡ Manual Crawl Triggered from Admin Dashboard...")
-    background_tasks.add_task(run_automated_check_and_post_cycle, False)
+    background_tasks.add_task(safe_crawl_cycle, False)
     return {"message": "30-Minute Multi-Source Crawl Dispatched!"}
 
 @app.post("/api/publish-carousel-now")
@@ -355,7 +438,7 @@ def trigger_carousel(background_tasks: BackgroundTasks, request: Request, author
     if not verify_auth(request, authorization, hpu_auth_session):
         return JSONResponse(status_code=401, content={"error": "Unauthorized"})
     log_event("⚡ Manual Routine Carousel Publish Triggered from Admin Dashboard...")
-    background_tasks.add_task(publish_routine_carousel_cycle, None, None, False)
+    background_tasks.add_task(safe_carousel_cycle, None, None, False)
     return {"message": "Routine Carousel Batch Dispatched!"}
 
 @app.post("/api/publish-reel-now")
@@ -363,7 +446,7 @@ def trigger_reel(background_tasks: BackgroundTasks, request: Request, authorizat
     if not verify_auth(request, authorization, hpu_auth_session):
         return JSONResponse(status_code=401, content={"error": "Unauthorized"})
     log_event("⚡ Manual Breaking Reel Publish Triggered from Admin Dashboard...")
-    background_tasks.add_task(publish_breaking_reel_cycle, None, False)
+    background_tasks.add_task(safe_reel_cycle, None, False)
     return {"message": "Breaking Reel Generation Dispatched!"}
 
 @app.post("/api/scan-comments")
@@ -371,7 +454,7 @@ def trigger_comments(background_tasks: BackgroundTasks, request: Request, author
     if not verify_auth(request, authorization, hpu_auth_session):
         return JSONResponse(status_code=401, content={"error": "Unauthorized"})
     log_event("⚡ Manual Comment Responder Triggered from Admin Dashboard...")
-    background_tasks.add_task(process_comments)
+    background_tasks.add_task(safe_comments_cycle)
     return {"message": "Instagram Comment Responder Dispatched!"}
 
 @app.post("/api/clear-logs")
