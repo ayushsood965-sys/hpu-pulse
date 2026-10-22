@@ -6,7 +6,7 @@ import numpy as np
 import imageio_ffmpeg
 from PIL import Image
 from .config import OUTPUT_DIR
-from .card_renderer import WIDTH as CARD_W, HEIGHT as CARD_H
+from .card_renderer import WIDTH as CARD_W, HEIGHT as CARD_H, MOUNTAIN_BG_PATH
 from .audio_library import get_random_instagram_track, get_track_by_id
 
 REEL_W = 1080
@@ -27,9 +27,21 @@ def create_looping_reel(card_image_path: str, track_id: str = None) -> tuple:
     raw_video_path = OUTPUT_DIR / f"raw_video_{uuid.uuid4().hex[:6]}.mp4"
     final_reel_path = OUTPUT_DIR / f"hpu_reel_{uuid.uuid4().hex[:8]}.mp4"
 
-    # Base 9:16 canvas with Academic Prussian Navy background
-    bg_sample = card_img.getpixel((20, 20))
-    base_canvas = Image.new("RGBA", (REEL_W, REEL_H), bg_sample)
+    # Base 9:16 canvas with clean white background and faded mountain footer
+    base_canvas = Image.new("RGBA", (REEL_W, REEL_H), (255, 255, 255, 255))
+    if MOUNTAIN_BG_PATH.exists():
+        try:
+            mt_img = Image.open(MOUNTAIN_BG_PATH).convert("RGBA")
+            mt_aspect = mt_img.height / mt_img.width
+            mt_h = int(REEL_W * mt_aspect)
+            mt_scaled = mt_img.resize((REEL_W, mt_h), Image.Resampling.LANCZOS)
+            alpha = mt_scaled.split()[3]
+            faded_alpha = alpha.point(lambda p: int(p * 0.50))
+            mt_scaled.putalpha(faded_alpha)
+            base_canvas.alpha_composite(mt_scaled, (0, REEL_H - mt_h))
+        except Exception:
+            pass
+
     card_y = (REEL_H - CARD_H) // 2
     base_canvas.paste(card_img, (0, card_y), card_img)
 

@@ -8,66 +8,72 @@ from .config import OUTPUT_DIR, INSTAGRAM_HANDLE
 WIDTH = 1080
 HEIGHT = 1350
 
-# Modern Dark Slate / Obsidian Aesthetic (Inspired by top Indian news & student update pages)
+# White Background & Light Green Palette with Dark Green Text
 THEME = {
-    "bg": (11, 15, 25),             # Deep Obsidian (#0B0F19)
-    "card_bg": (19, 27, 46),        # Sleek Glassmorphism Inset (#131B2E)
-    "card_border": (42, 58, 84),    # Subtle Slate Border (#2A3A54)
-    "outer_border": (28, 38, 56),   # Crisp framing border
-    "corner_accent": (59, 130, 246),# Corner Accent Marks (#3B82F6)
-    "primary": (255, 255, 255),     # Crisp Pure White Headline
-    "body": (241, 245, 249),        # High-Readability Off-White (#F1F5F9)
-    "muted": (148, 163, 184),       # Slate Secondary (#94A3B8)
-    "dim": (100, 116, 139),         # Muted Subtext (#64748B)
-    "footer": (203, 213, 225)       # Footer Text (#CBD5E1)
+    "bg": (255, 255, 255),               # Pure Clean White Canvas (#FFFFFF)
+    "card_bg": (244, 251, 247),          # Soft Pastel Mint Inset Panel (#F4FBF7)
+    "card_border": (187, 247, 208),      # Delicate Light Green Border (#BBF7D0)
+    "outer_border": (220, 245, 230),     # Subtle Outer Framing (#DCF5E6)
+    "corner_accent": (74, 222, 128),     # Crisp Light Green Corner Accents (#4ADE80)
+    "primary": (10, 54, 34),             # Deep Dark Forest Green Headline (#0A3622)
+    "body": (19, 78, 74),                # High-Contrast Dark Pine Text (#134E4A)
+    "muted": (22, 101, 52),              # Medium Dark Forest Green (#166534)
+    "dim": (74, 120, 90),                # Muted Olive-Green Subtext (#4A785A)
+    "footer": (21, 128, 61),             # Vibrant Forest Green Footer (#15803D)
+    "badge_bg": (220, 252, 231),         # Pastel Mint Pill (#DCFCE7)
+    "badge_border": (134, 239, 172)      # Mint Pill Border (#86EFAC)
 }
 
+# Category Pill Colors tailored to Light Green & Dark Green Palette
 BADGE_COLORS = {
     "BREAKING": {
-        "bg": (220, 38, 38),
-        "fg": (255, 255, 255),
-        "dot": (254, 202, 202),
-        "glow": (127, 29, 29),
-        "bullet": (239, 68, 68)
+        "bg": (254, 242, 242),           # Light Red Pastel
+        "border": (252, 165, 165),
+        "fg": (153, 27, 27),             # Dark Red Text
+        "dot": (239, 68, 68),
+        "bullet": (220, 38, 38)
     },
     "RESULT": {
-        "bg": (16, 185, 129),
-        "fg": (255, 255, 255),
-        "dot": (209, 250, 229),
-        "glow": (6, 95, 70),
-        "bullet": (52, 211, 153)
+        "bg": (220, 252, 231),           # Soft Emerald Pastel
+        "border": (134, 239, 172),
+        "fg": (6, 95, 70),               # Deep Emerald Text
+        "dot": (16, 185, 129),
+        "bullet": (5, 150, 105)
     },
     "EXAM": {
-        "bg": (245, 158, 11),
-        "fg": (15, 23, 42),
-        "dot": (254, 243, 199),
-        "glow": (146, 64, 14),
-        "bullet": (251, 191, 36)
+        "bg": (254, 249, 195),           # Soft Amber Pastel
+        "border": (253, 224, 71),
+        "fg": (113, 63, 18),             # Dark Bronze Text
+        "dot": (234, 179, 8),
+        "bullet": (202, 138, 4)
     },
     "ADMISSION": {
-        "bg": (6, 182, 212),
-        "fg": (15, 23, 42),
-        "dot": (207, 250, 254),
-        "glow": (21, 94, 117),
-        "bullet": (34, 211, 238)
+        "bg": (224, 242, 254),           # Soft Sky Pastel
+        "border": (186, 230, 253),
+        "fg": (12, 74, 110),             # Deep Navy Text
+        "dot": (14, 165, 233),
+        "bullet": (2, 132, 199)
     },
     "HOLIDAY": {
-        "bg": (239, 68, 68),
-        "fg": (255, 255, 255),
-        "dot": (254, 202, 202),
-        "glow": (153, 27, 27),
-        "bullet": (248, 113, 113)
+        "bg": (255, 237, 213),           # Soft Orange Pastel
+        "border": (253, 186, 116),
+        "fg": (154, 52, 18),
+        "dot": (249, 115, 22),
+        "bullet": (234, 88, 12)
     },
     "GENERAL": {
-        "bg": (99, 102, 241),
-        "fg": (255, 255, 255),
-        "dot": (224, 231, 255),
-        "glow": (55, 48, 163),
-        "bullet": (129, 140, 248)
+        "bg": (220, 252, 231),           # Classic Light Green Mint
+        "border": (134, 239, 172),
+        "fg": (6, 78, 59),               # Deep Dark Green Text
+        "dot": (16, 185, 129),
+        "bullet": (16, 185, 129)
     }
 }
 
-FONTS_DIR = Path(__file__).resolve().parent / "assets" / "fonts"
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+FONTS_DIR = ASSETS_DIR / "fonts"
+LOGO_PATH = ASSETS_DIR / "hpu_logo.png"
+MOUNTAIN_BG_PATH = ASSETS_DIR / "hpu_mountains_bg.png"
 
 def clean_display_text(text: str) -> str:
     """
@@ -83,40 +89,42 @@ def clean_display_text(text: str) -> str:
     cleaned = re.sub(r'(?:www\.)?(?:nexams|nadmissions|hpushimla|hpuniv)\S+', 'portal', cleaned)
     cleaned = re.sub(r'\s*-\s*(?:ANI\s*News|Amar\s*Ujala|Divya\s*Himachal|The\s*Tribune|Hindustan\s*Times|Times\s*of\s*India|Indian\s*Express|Jagran|News18).*$', '', cleaned, flags=re.IGNORECASE)
 
-    # Allow ASCII printable, Devanagari block (\u0900-\u097F), Rupee sign (\u20B9), Hindi danda (\u0964, \u0965)
     allowed_pattern = r'[^\x20-\x7E\u0900-\u097F\u20B9\u0964\u0965]+'
     cleaned = re.sub(allowed_pattern, ' ', cleaned).strip()
     return re.sub(r'\s+', ' ', cleaned)
 
-# Backward-compatibility alias
 clean_ascii_text = clean_display_text
 
 def is_hindi_text(text: str) -> bool:
     """Returns True if the text contains Devanagari characters."""
     return bool(re.search(r'[\u0900-\u097F]', text or ""))
 
-def get_font(font_type: str, size: int) -> ImageFont.FreeTypeFont:
+def get_font(font_type: str, size: int, is_hindi: bool = False):
     """
-    Loads modern bundled fonts (Poppins, Inter) with system fallbacks.
-    font_type: 'bold', 'semibold', 'medium', 'regular'
+    Loads appropriate font for Hindi (Noto Sans Devanagari / Nirmala UI)
+    or English (Poppins / Inter).
     """
-    font_map = {
-        "bold": "Poppins-Bold.ttf",
-        "semibold": "Poppins-SemiBold.ttf",
-        "medium": "Poppins-Medium.ttf",
-        "regular": "Poppins-Regular.ttf"
-    }
-
-    target_name = font_map.get(font_type.lower(), "Poppins-Bold.ttf")
-
-    candidates = [
-        FONTS_DIR / target_name,
-        FONTS_DIR / "Inter.ttf",
-        Path("C:/Windows/Fonts") / ("segoeuib.ttf" if "bold" in font_type.lower() else "segoeui.ttf"),
-        Path("C:/Windows/Fonts") / ("arialbd.ttf" if "bold" in font_type.lower() else "arial.ttf"),
-        Path("/usr/share/fonts/truetype/dejavu") / ("DejaVuSans-Bold.ttf" if "bold" in font_type.lower() else "DejaVuSans.ttf"),
-        Path("/usr/share/fonts/truetype/liberation") / ("LiberationSans-Bold.ttf" if "bold" in font_type.lower() else "LiberationSans-Regular.ttf")
-    ]
+    if is_hindi:
+        candidates = [
+            FONTS_DIR / ("NotoSansDevanagari-Bold.ttf" if "bold" in font_type.lower() else "NotoSansDevanagari-Medium.ttf"),
+            Path("C:/Windows/Fonts/Nirmala.ttc"),
+            FONTS_DIR / "Poppins-Bold.ttf",
+            FONTS_DIR / "Inter.ttf"
+        ]
+    else:
+        font_map = {
+            "bold": "Poppins-Bold.ttf",
+            "semibold": "Poppins-SemiBold.ttf",
+            "medium": "Poppins-Medium.ttf",
+            "regular": "Poppins-Regular.ttf"
+        }
+        target_name = font_map.get(font_type.lower(), "Poppins-Bold.ttf")
+        candidates = [
+            FONTS_DIR / target_name,
+            FONTS_DIR / "Inter.ttf",
+            Path("C:/Windows/Fonts/segoeuib.ttf" if "bold" in font_type.lower() else "C:/Windows/Fonts/segoeui.ttf"),
+            Path("C:/Windows/Fonts/arialbd.ttf" if "bold" in font_type.lower() else "C:/Windows/Fonts/arial.ttf")
+        ]
 
     for p in candidates:
         if p.exists():
@@ -125,12 +133,9 @@ def get_font(font_type: str, size: int) -> ImageFont.FreeTypeFont:
             except Exception:
                 pass
 
-    try:
-        return ImageFont.truetype(target_name, size)
-    except Exception:
-        return ImageFont.load_default()
+    return ImageFont.load_default()
 
-def wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int, draw: ImageDraw.ImageDraw) -> list:
+def wrap_text(text: str, font, max_width: int, draw) -> list:
     """Wraps text into visual lines within max_width."""
     words = text.split()
     if not words:
@@ -151,36 +156,61 @@ def wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int, draw: Ima
         lines.append(" ".join(current_line))
     return lines
 
-def draw_ambient_background(img: Image.Image, draw: ImageDraw.ImageDraw, badge_key: str):
-    """Draws sleek gaussian blurred ambient corner glows and crisp framing borders."""
-    colors = BADGE_COLORS.get(badge_key, BADGE_COLORS["GENERAL"])
-    rgb_glow = colors["glow"]
-    glow_rgba = (rgb_glow[0], rgb_glow[1], rgb_glow[2], 115)
+def create_base_canvas(badge_key: str = "GENERAL") -> Image.Image:
+    """
+    Creates a premium white canvas with:
+    1. Faded light-green Himalayan mountain ridges at the bottom.
+    2. Faded central HPU crest watermark (~5% opacity).
+    3. Crisp modern outer framing border with light green corner accent marks.
+    """
+    img = Image.new("RGBA", (WIDTH, HEIGHT), (255, 255, 255, 255))
 
-    # Soft glowing radial atmosphere
-    glow_overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    g_draw = ImageDraw.Draw(glow_overlay)
-    g_draw.ellipse([WIDTH - 360, -160, WIDTH + 200, 400], fill=glow_rgba)
-    g_draw.ellipse([-200, HEIGHT - 400, 360, HEIGHT + 160], fill=glow_rgba)
-    glow_blurred = glow_overlay.filter(ImageFilter.GaussianBlur(85))
-    img.paste(glow_blurred, (0, 0), glow_blurred)
+    # 1. Blend faded mountain landscape
+    if MOUNTAIN_BG_PATH.exists():
+        try:
+            mt_img = Image.open(MOUNTAIN_BG_PATH).convert("RGBA")
+            mt_img = mt_img.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+            alpha = mt_img.split()[3]
+            faded_alpha = alpha.point(lambda p: int(p * 0.70))
+            mt_img.putalpha(faded_alpha)
+            img.alpha_composite(mt_img)
+        except Exception as e:
+            print(f"[Renderer] Mountain background blend warning: {e}")
 
-    # Outer border framing
+    # 2. Add subtle HPU watermark in the center
+    if LOGO_PATH.exists():
+        try:
+            logo_wm = Image.open(LOGO_PATH).convert("RGBA")
+            wm_size = 480
+            logo_wm = logo_wm.resize((wm_size, wm_size), Image.Resampling.LANCZOS)
+            r, g, b, a = logo_wm.split()
+            subtle_a = a.point(lambda p: int(p * 0.055))
+            logo_wm.putalpha(subtle_a)
+            wm_x = (WIDTH - wm_size) // 2
+            wm_y = (HEIGHT - wm_size) // 2 - 20
+            img.alpha_composite(logo_wm, (wm_x, wm_y))
+        except Exception as e:
+            print(f"[Renderer] Logo watermark warning: {e}")
+
+    canvas = img.convert("RGB")
+    draw = ImageDraw.Draw(canvas)
+
+    # 3. Outer framing border
     draw.rectangle([28, 28, WIDTH - 28, HEIGHT - 28], outline=THEME["outer_border"], width=2)
 
-    # Sleek modern corner tick marks
+    # 4. Corner accent marks (Light Green)
     corner_len = 24
-    draw.line([(28, 28), (28 + corner_len, 28)], fill=THEME["corner_accent"], width=4)
-    draw.line([(28, 28), (28, 28 + corner_len)], fill=THEME["corner_accent"], width=4)
+    ca = THEME["corner_accent"]
+    draw.line([(28, 28), (28 + corner_len, 28)], fill=ca, width=4)
+    draw.line([(28, 28), (28, 28 + corner_len)], fill=ca, width=4)
+    draw.line([(WIDTH - 28, 28), (WIDTH - 28 - corner_len, 28)], fill=ca, width=4)
+    draw.line([(WIDTH - 28, 28), (WIDTH - 28, 28 + corner_len)], fill=ca, width=4)
+    draw.line([(28, HEIGHT - 28), (28 + corner_len, HEIGHT - 28)], fill=ca, width=4)
+    draw.line([(28, HEIGHT - 28), (28, HEIGHT - 28 - corner_len)], fill=ca, width=4)
+    draw.line([(WIDTH - 28, HEIGHT - 28), (WIDTH - 28 - corner_len, HEIGHT - 28)], fill=ca, width=4)
+    draw.line([(WIDTH - 28, HEIGHT - 28), (WIDTH - 28, HEIGHT - 28 - corner_len)], fill=ca, width=4)
 
-    draw.line([(WIDTH - 28, 28), (WIDTH - 28 - corner_len, 28)], fill=THEME["corner_accent"], width=4)
-    draw.line([(WIDTH - 28, 28), (WIDTH - 28, 28 + corner_len)], fill=THEME["corner_accent"], width=4)
-
-    draw.line([(28, HEIGHT - 28), (28 + corner_len, HEIGHT - 28)], fill=THEME["corner_accent"], width=4)
-    draw.line([(28, HEIGHT - 28), (28, HEIGHT - 28 - corner_len)], fill=THEME["corner_accent"], width=4)
-
-    draw.line([(WIDTH - 28, HEIGHT - 28), (WIDTH - 28 - corner_len, HEIGHT - 28)], fill=THEME["corner_accent"], width=4)
-    draw.line([(WIDTH - 28, HEIGHT - 28), (WIDTH - 28, HEIGHT - 28 - corner_len)], fill=THEME["corner_accent"], width=4)
+    return canvas
 
 BADGE_KEYWORDS = {
     "BREAKING": ["BREAKING", "ALERT", "URGENT", "ब्रेकिंग", "अलर्ट", "ताज़ा", "ताजा", "तत्काल", "महत्वपूर्ण"],
@@ -209,8 +239,16 @@ BADGE_MAP_TO_HINDI = {
     "UPDATE": "आधिकारिक सूचना",
 }
 
-def draw_header(draw: ImageDraw.ImageDraw, badge_text: str, slide_num: int = 1, total_slides: int = 1, is_hindi: bool = False) -> str:
-    """Renders top verified community header and category status badge in English or Hindi."""
+def draw_official_header(canvas: Image.Image, badge_text: str, is_hindi: bool = False, slide_num: int = 1, total_slides: int = 1) -> str:
+    """
+    Renders top header:
+    - Official circular HPU emblem in top center.
+    - Official University Name: 'हिमाचल प्रदेश विश्वविद्यालय, शिमला' / 'HIMACHAL PRADESH UNIVERSITY • SHIMLA'.
+    - Community Sub-tag: 'HPU PULSE • STUDENT PORTAL UPDATES'.
+    - Centered category badge pill with status dot.
+    - Optional slide counter pill (e.g. '1/4').
+    """
+    draw = ImageDraw.Draw(canvas)
     clean_badge = clean_display_text(badge_text).strip()
     is_hi = is_hindi or is_hindi_text(clean_badge)
 
@@ -224,90 +262,100 @@ def draw_header(draw: ImageDraw.ImageDraw, badge_text: str, slide_num: int = 1, 
         if not is_hindi_text(clean_badge):
             clean_badge = "आधिकारिक सूचना"
 
-    # Top Live Status Bar
-    top_font = get_font("bold", 22)
-    top_text = "एचपीयू शिमला  •  विद्यार्थी अपडेट्स" if is_hi else "HPU PULSE  •  STUDENT UPDATES"
-    bbox = draw.textbbox((0, 0), top_text, font=top_font)
-    tw = bbox[2] - bbox[0]
-
-    # Glowing green status live dot
-    dot_x = (WIDTH - tw) / 2 - 20
-    dot_y = 74
-    draw.ellipse([dot_x - 5, dot_y - 5, dot_x + 5, dot_y + 5], fill=(34, 197, 94))
-    draw.text(((WIDTH - tw) / 2 + 5, 62), top_text, fill=THEME["muted"], font=top_font)
-
-    # Accent divider line
-    draw.line([(WIDTH / 2 - 80, 98), (WIDTH / 2 + 80, 98)], fill=THEME["card_border"], width=2)
-
-    # Determine badge key
     if not clean_badge:
         clean_badge = "आधिकारिक सूचना" if is_hi else "OFFICIAL UPDATE"
 
+    # 1. Official HPU Logo at top center
+    logo_size = 80
+    logo_y = 48
+    bc_cx = WIDTH // 2
+    bc_cy = logo_y + (logo_size // 2)
+
+    if LOGO_PATH.exists():
+        try:
+            logo_img = Image.open(LOGO_PATH).convert("RGBA")
+            logo_img = logo_img.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+            badge_circle_r = (logo_size // 2) + 5
+            draw.ellipse(
+                [bc_cx - badge_circle_r, bc_cy - badge_circle_r, bc_cx + badge_circle_r, bc_cy + badge_circle_r],
+                fill=(255, 255, 255),
+                outline=THEME["card_border"],
+                width=2
+            )
+            canvas.paste(logo_img, (bc_cx - logo_size // 2, bc_cy - logo_size // 2), logo_img)
+        except Exception:
+            pass
+
+    # 2. University Title
+    title_text = "हिमाचल प्रदेश विश्वविद्यालय, शिमला" if is_hi else "HIMACHAL PRADESH UNIVERSITY • SHIMLA"
+    t_font = get_font("bold", 22, is_hindi=is_hi)
+    t_bbox = draw.textbbox((0, 0), title_text, font=t_font)
+    tw = t_bbox[2] - t_bbox[0]
+    draw.text(((WIDTH - tw) // 2, logo_y + logo_size + 14), title_text, fill=THEME["primary"], font=t_font)
+
+    # Sub-tag
+    sub_font = get_font("semibold", 14, is_hindi=False)
+    sub_tag = "HPU PULSE  •  STUDENT PORTAL UPDATES"
+    st_bbox = draw.textbbox((0, 0), sub_tag, font=sub_font)
+    stw = st_bbox[2] - st_bbox[0]
+    draw.text(((WIDTH - stw) // 2, logo_y + logo_size + 44), sub_tag, fill=THEME["muted"], font=sub_font)
+
+    # 3. Category status badge pill
     upper_badge = clean_badge.upper()
     badge_key = "GENERAL"
     for cat, kws in BADGE_KEYWORDS.items():
         if any(kw in upper_badge for kw in kws):
             badge_key = cat
             break
-    colors = BADGE_COLORS[badge_key]
+    col = BADGE_COLORS.get(badge_key, BADGE_COLORS["GENERAL"])
 
-    # Category Pill Badge
-    b_font = get_font("bold", 22)
+    b_font = get_font("bold", 21, is_hindi=is_hi)
     b_bbox = draw.textbbox((0, 0), clean_badge, font=b_font)
     bw = b_bbox[2] - b_bbox[0]
     bh = b_bbox[3] - b_bbox[1]
 
-    dot_radius = 5
-    dot_spacing = 14
-    total_pill_w = bw + (dot_radius * 2) + dot_spacing + 48
-    bx = (WIDTH - total_pill_w) / 2
-    by = 124
-    pill_h = bh + 24
+    pill_w = bw + 50
+    pill_h = bh + 20
+    pill_x = (WIDTH - pill_w) // 2
+    pill_y = logo_y + logo_size + 76
 
-    draw.rounded_rectangle([bx, by, bx + total_pill_w, by + pill_h], radius=14, fill=colors["bg"])
-    
-    # White/contrast status dot inside pill
-    dot_cx = bx + 22 + dot_radius
-    dot_cy = by + (pill_h / 2)
-    draw.ellipse([dot_cx - dot_radius, dot_cy - dot_radius, dot_cx + dot_radius, dot_cy + dot_radius], fill=colors["dot"])
+    draw.rounded_rectangle([pill_x, pill_y, pill_x + pill_w, pill_y + pill_h], radius=12, fill=col["bg"], outline=col["border"], width=1)
+    draw.ellipse([pill_x + 16, pill_y + 11, pill_x + 25, pill_y + 20], fill=col["dot"])
+    draw.text((pill_x + 34, pill_y + 4), clean_badge, fill=col["fg"], font=b_font)
 
-    # Badge text
-    text_x = dot_cx + dot_radius + dot_spacing
-    text_y = by + ((pill_h - bh) / 2) - 2
-    draw.text((text_x, text_y), clean_badge, fill=colors["fg"], font=b_font)
-
-    # Slide counter if carousel
+    # 4. Slide progress counter
     if total_slides > 1:
-        prog_font = get_font("bold", 20)
+        prog_font = get_font("bold", 20, is_hindi=False)
         prog_text = f"{slide_num}/{total_slides}"
         p_bbox = draw.textbbox((0, 0), prog_text, font=prog_font)
         pw = p_bbox[2] - p_bbox[0]
         px = WIDTH - pw - 85
-        draw.rounded_rectangle([px - 14, by + 2, px + pw + 14, by + pill_h - 2], radius=10, fill=THEME["card_bg"], outline=THEME["card_border"], width=1)
-        draw.text((px, by + 8), prog_text, fill=THEME["primary"], font=prog_font)
+        draw.rounded_rectangle([px - 14, pill_y, px + pw + 14, pill_y + pill_h], radius=10, fill=THEME["card_bg"], outline=THEME["card_border"], width=1)
+        draw.text((px, pill_y + 5), prog_text, fill=THEME["primary"], font=prog_font)
 
     return badge_key
 
-def draw_footer(draw: ImageDraw.ImageDraw, is_cover: bool = False, is_hindi: bool = False):
+# Backward-compatibility alias
+draw_header = draw_official_header
+
+def draw_official_footer(draw: ImageDraw.ImageDraw, is_cover: bool = False, is_hindi: bool = False):
     """Draws crisp verified community footer in English or Hindi."""
-    f_font = get_font("bold", 24)
-    uni_name = "हिमाचल प्रदेश विश्वविद्यालय" if is_hindi else "Himachal Pradesh University"
-    handle_text = f"{INSTAGRAM_HANDLE}  •  {uni_name}"
+    f_font = get_font("bold", 23, is_hindi=False)
+    handle_text = f"{INSTAGRAM_HANDLE}  •  Shimla, Himachal Pradesh"
     f_bbox = draw.textbbox((0, 0), handle_text, font=f_font)
     fw = f_bbox[2] - f_bbox[0]
-    draw.text(((WIDTH - fw) / 2, HEIGHT - 105), handle_text, fill=THEME["footer"], font=f_font)
+    draw.text(((WIDTH - fw) / 2, HEIGHT - 100), handle_text, fill=THEME["footer"], font=f_font)
 
-    sub_font = get_font("regular", 20)
+    sub_font = get_font("medium", 19, is_hindi=is_hindi)
     sub_text = "यह पोस्ट सेव करें  •  सहपाठियों के साथ शेयर करें" if is_hindi else "Save this post  •  Share with your classmates"
     s_bbox = draw.textbbox((0, 0), sub_text, font=sub_font)
     sw = s_bbox[2] - s_bbox[0]
-    draw.text(((WIDTH - sw) / 2, HEIGHT - 70), sub_text, fill=THEME["dim"], font=sub_font)
+    draw.text(((WIDTH - sw) / 2, HEIGHT - 68), sub_text, fill=THEME["dim"], font=sub_font)
+
+draw_footer = draw_official_footer
 
 def parse_points(details: str, key_points: list = None) -> list:
-    """
-    Intelligently extracts a list of distinct structured points in English or Hindi.
-    Prevents running a paragraph into visual lines that each get bulleted!
-    """
+    """Intelligently extracts a list of distinct structured points in English or Hindi."""
     if key_points and isinstance(key_points, list) and len(key_points) > 0:
         cleaned_pts = [clean_display_text(str(p)) for p in key_points if clean_display_text(str(p))]
         if cleaned_pts:
@@ -317,8 +365,6 @@ def parse_points(details: str, key_points: list = None) -> list:
         return ["Details available on official student portal.", "Check your student account for more instructions."]
 
     cleaned = clean_display_text(details)
-
-    # Split by newlines, bullets, or numbers
     raw_splits = re.split(r'\n+|•|\b(?:\d+[\.\)]\s+)', cleaned)
     points = []
     for s in raw_splits:
@@ -327,7 +373,6 @@ def parse_points(details: str, key_points: list = None) -> list:
             points.append(item)
 
     if not points:
-        # Fallback split into sentences (handles English . ! ? and Hindi danda ।)
         sentences = re.split(r'(?<=[.!?।])\s+', cleaned)
         points = [st.strip() for st in sentences if len(st.strip()) > 8]
 
@@ -335,15 +380,16 @@ def parse_points(details: str, key_points: list = None) -> list:
 
 def render_breaking_card(headline: str, category: str = "GENERAL", details: str = "", badge: str = "BREAKING NEWS", key_points: list = None) -> str:
     """
-    Renders a stunning 1080x1350 card with Modern Dark Obsidian aesthetic,
-    Poppins typography, and CORRECT bullet point indentation (NO multiple bullets on wrapped lines!).
-    Supports both English and Hindi.
+    Renders a stunning 1080x1350 card with:
+    - Pure white background with faded mountains and HPU seal.
+    - Dark green typography for headline and body text.
+    - Soft pastel mint content panel with light green border.
+    - Fully supports English and Hindi.
     """
     clean_h = clean_display_text(headline)
     points = parse_points(details, key_points)
     is_hi = is_hindi_text(f"{clean_h} {' '.join(points)} {badge} {details}")
 
-    # Fallback safeguard against empty points
     if not points:
         if is_hi:
             points = [
@@ -356,27 +402,25 @@ def render_breaking_card(headline: str, category: str = "GENERAL", details: str 
                 "Check your student account for more instructions."
             ]
 
+    upper_b = (badge or "").upper()
     badge_key = "GENERAL"
     for cat, kws in BADGE_KEYWORDS.items():
-        if any(kw in (badge or "").upper() for kw in kws) or any(kw in (category or "").upper() for kw in kws):
+        if any(kw in upper_b for kw in kws) or any(kw in (category or "").upper() for kw in kws):
             badge_key = cat
             break
 
-    img = Image.new("RGB", (WIDTH, HEIGHT), THEME["bg"])
-    draw = ImageDraw.Draw(img)
+    # 1. Base Canvas with Mountains & Watermark
+    canvas = create_base_canvas(badge_key)
+    draw = ImageDraw.Draw(canvas)
 
-    # 1. Ambient Background Glow & Framing
-    draw_ambient_background(img, draw, badge_key)
+    # 2. Header with Logo & Badge
+    draw_official_header(canvas, badge, is_hindi=is_hi)
 
-    # 2. Header
-    draw_header(draw, badge, is_hindi=is_hi)
-
-    # 3. Clean Headline
-    h_font = get_font("bold", 54)
-    h_lines = wrap_text(clean_h, h_font, WIDTH - 180, draw)
-    h_lines = h_lines[:3]  # Max 3 lines
-    line_h = 72
-    h_total_h = len(h_lines) * line_h
+    # 3. Clean Headline in Dark Forest Green
+    h_font = get_font("bold", 54, is_hindi=is_hi)
+    h_lines = wrap_text(clean_h, h_font, WIDTH - 170, draw)
+    h_lines = h_lines[:3]
+    line_h = 74
     y_start = 250
 
     for i, line in enumerate(h_lines):
@@ -384,9 +428,9 @@ def render_breaking_card(headline: str, category: str = "GENERAL", details: str 
         lw = bbox[2] - bbox[0]
         draw.text(((WIDTH - lw) / 2, y_start + (i * line_h)), line, fill=THEME["primary"], font=h_font)
 
-    # 4. Inset Frosted Content Panel
-    box_top = y_start + h_total_h + 40
-    box_bottom = HEIGHT - 165
+    # 4. Inset Soft Mint Content Panel
+    box_top = y_start + (len(h_lines) * line_h) + 40
+    box_bottom = HEIGHT - 155
     draw.rounded_rectangle(
         [65, box_top, WIDTH - 65, box_bottom],
         radius=22,
@@ -395,16 +439,15 @@ def render_breaking_card(headline: str, category: str = "GENERAL", details: str 
         width=2
     )
 
-    # Section header inside card
-    sub_head_font = get_font("semibold", 24)
-    sub_head_text = "मुख्य बिंदु और विवरण" if is_hi else "KEY DETAILS & UPDATES"
-    draw.text((105, box_top + 32), sub_head_text, fill=THEME["muted"], font=sub_head_font)
+    # Sub-header inside card
+    sub_head_font = get_font("semibold", 24, is_hindi=is_hi)
+    sub_head_text = "मुख्य बिंदु और आधिकारिक विवरण" if is_hi else "KEY DETAILS & OFFICIAL UPDATES"
+    draw.text((105, box_top + 30), sub_head_text, fill=THEME["muted"], font=sub_head_font)
     draw.line([(105, box_top + 64), (WIDTH - 105, box_top + 64)], fill=THEME["card_border"], width=1)
 
-    # 5. FIXED BULLET POINTS RENDERING:
-    p_font = get_font("medium", 30)
+    # 5. Bullet Points in Dark Pine with Emerald Dots
+    p_font = get_font("medium", 30, is_hindi=is_hi)
     bullet_color = BADGE_COLORS[badge_key]["bullet"]
-    
     py = box_top + 88
     max_text_width = WIDTH - 270
 
@@ -414,41 +457,39 @@ def render_breaking_card(headline: str, category: str = "GENERAL", details: str 
             continue
 
         for line_i, line in enumerate(wrapped):
-            # Check vertical space
-            if py > box_bottom - 50:
+            if py > box_bottom - 45:
                 break
 
             if line_i == 0:
-                # FIRST LINE ONLY: Draw bullet dot
                 draw.ellipse([105, py + 12, 117, py + 24], fill=bullet_color)
                 draw.text((135, py), line, fill=THEME["body"], font=p_font)
             else:
-                # SUBSEQUENT WRAPPED LINES: Indented cleanly, NO bullet dot!
                 draw.text((135, py), line, fill=THEME["body"], font=p_font)
 
             py += 44
 
-        # Paragraph gap between distinct points
-        py += 22
+        py += 24
 
     # 6. Footer
-    draw_footer(draw, is_cover=True, is_hindi=is_hi)
+    draw_official_footer(draw, is_cover=True, is_hindi=is_hi)
 
     out_path = OUTPUT_DIR / f"hpu_card_{uuid.uuid4().hex[:8]}.png"
-    img.save(str(out_path), "PNG", quality=95)
+    canvas.save(str(out_path), "PNG", quality=95)
     return str(out_path)
 
 def render_carousel_slides(carousel_data: dict) -> list:
     """
-    Renders 2-5 premium slides in Modern Dark Obsidian theme with Poppins fonts.
-    Correct bullet rendering, sleek swipe indicators, zero URLs, full Hindi & English support.
+    Renders 2-5 premium slides in:
+    - Pure white background with faded mountains and HPU logo.
+    - Dark green typography for headline and body text.
+    - Light green category accents, borders, and badge styling.
+    - Full support for Hindi and English.
     """
     slides = carousel_data.get("slides", [])
     badge = carousel_data.get("badge", "UPDATE")
     total = len(slides)
     slide_paths = []
 
-    # Detect if the overall carousel data is in Hindi
     all_text = f"{badge} {carousel_data.get('headline', '')}"
     for s in slides:
         all_text += f" {s.get('title', '')} {s.get('subtitle', '')} {s.get('heading', '')} {' '.join(str(p) for p in s.get('points', []))}"
@@ -463,12 +504,12 @@ def render_carousel_slides(carousel_data: dict) -> list:
     bullet_color = BADGE_COLORS[badge_key]["bullet"]
 
     for idx, s in enumerate(slides, start=1):
-        img = Image.new("RGB", (WIDTH, HEIGHT), THEME["bg"])
-        draw = ImageDraw.Draw(img)
+        # 1. Base Canvas with Mountains & Watermark
+        canvas = create_base_canvas(badge_key)
+        draw = ImageDraw.Draw(canvas)
 
-        # Ambient Glow & Framing
-        draw_ambient_background(img, draw, badge_key)
-        draw_header(draw, badge, slide_num=idx, total_slides=total, is_hindi=is_hi_overall)
+        # 2. Header with Logo, Title, and Badge
+        draw_official_header(canvas, badge, is_hindi=is_hi_overall, slide_num=idx, total_slides=total)
 
         if idx == 1:
             # COVER SLIDE
@@ -476,33 +517,33 @@ def render_carousel_slides(carousel_data: dict) -> list:
             subtitle = clean_display_text(s.get("subtitle", ""))
             is_hi_cover = is_hi_overall or is_hindi_text(f"{title} {subtitle} {badge}")
 
-            t_font = get_font("bold", 60)
+            t_font = get_font("bold", 58, is_hindi=is_hi_cover)
             t_lines = wrap_text(title, t_font, WIDTH - 180, draw)
-            total_th = len(t_lines) * 80
-            y_start = (HEIGHT - total_th) / 2 - 40
+            total_th = len(t_lines) * 78
+            y_start = (HEIGHT - total_th) / 2 - 30
 
             for i, line in enumerate(t_lines):
                 bbox = draw.textbbox((0, 0), line, font=t_font)
                 lw = bbox[2] - bbox[0]
-                draw.text(((WIDTH - lw) / 2, y_start + (i * 80)), line, fill=THEME["primary"], font=t_font)
+                draw.text(((WIDTH - lw) / 2, y_start + (i * 78)), line, fill=THEME["primary"], font=t_font)
 
             if subtitle:
-                sub_font = get_font("semibold", 32)
+                sub_font = get_font("semibold", 30, is_hindi=is_hi_cover)
                 s_bbox = draw.textbbox((0, 0), subtitle, font=sub_font)
                 sw = s_bbox[2] - s_bbox[0]
-                draw.text(((WIDTH - sw) / 2, y_start + total_th + 35), subtitle, fill=BADGE_COLORS[badge_key]["bullet"], font=sub_font)
+                draw.text(((WIDTH - sw) / 2, y_start + total_th + 32), subtitle, fill=THEME["muted"], font=sub_font)
 
-            # Modern Swipe Cue Button Pill
-            sw_font = get_font("bold", 24)
+            # Swipe cue button pill (Soft mint background, light green border, dark green text)
+            sw_font = get_font("bold", 23, is_hindi=is_hi_cover)
             sw_text = "पूरी जानकारी के लिए स्वाइप करें  >>" if is_hi_cover else "SWIPE FOR FULL DETAILS  >>"
             sw_bbox = draw.textbbox((0, 0), sw_text, font=sw_font)
             sw_w = sw_bbox[2] - sw_bbox[0]
             sw_h = sw_bbox[3] - sw_bbox[1]
 
             pill_w = sw_w + 50
-            pill_h = sw_h + 26
+            pill_h = sw_h + 24
             pill_x = (WIDTH - pill_w) / 2
-            pill_y = HEIGHT - 210
+            pill_y = HEIGHT - 205
 
             draw.rounded_rectangle(
                 [pill_x, pill_y, pill_x + pill_w, pill_y + pill_h],
@@ -511,8 +552,8 @@ def render_carousel_slides(carousel_data: dict) -> list:
                 outline=THEME["card_border"],
                 width=2
             )
-            draw.text(((WIDTH - sw_w) / 2, pill_y + 11), sw_text, fill=THEME["primary"], font=sw_font)
-            draw_footer(draw, is_cover=True, is_hindi=is_hi_cover)
+            draw.text(((WIDTH - sw_w) / 2, pill_y + 10), sw_text, fill=THEME["primary"], font=sw_font)
+            draw_official_footer(draw, is_cover=True, is_hindi=is_hi_cover)
 
         else:
             # DETAIL SLIDES
@@ -522,7 +563,6 @@ def render_carousel_slides(carousel_data: dict) -> list:
             points = [clean_display_text(str(p)) for p in raw_points if clean_display_text(str(p))]
             is_hi_detail = is_hi_overall or is_hindi_text(f"{heading} {' '.join(points)}")
 
-            # CRITICAL SAFEGUARD: Never leave a content card blank!
             if not points:
                 if is_hi_detail:
                     points = [
@@ -535,12 +575,12 @@ def render_carousel_slides(carousel_data: dict) -> list:
                         "Check your student account for more instructions."
                     ]
 
-            h_font = get_font("bold", 46)
+            h_font = get_font("bold", 44, is_hindi=is_hi_detail)
             draw.text((85, 230), heading, fill=THEME["primary"], font=h_font)
-            draw.line([(85, 292), (WIDTH - 85, 292)], fill=THEME["card_border"], width=2)
+            draw.line([(85, 290), (WIDTH - 85, 290)], fill=THEME["card_border"], width=2)
 
-            box_top = 320
-            box_bottom = HEIGHT - 165
+            box_top = 315
+            box_bottom = HEIGHT - 155
             draw.rounded_rectangle(
                 [65, box_top, WIDTH - 65, box_bottom],
                 radius=20,
@@ -549,7 +589,7 @@ def render_carousel_slides(carousel_data: dict) -> list:
                 width=2
             )
 
-            p_font = get_font("medium", 32)
+            p_font = get_font("medium", 30, is_hindi=is_hi_detail)
             py = box_top + 45
             max_p_width = WIDTH - 260
 
@@ -559,26 +599,23 @@ def render_carousel_slides(carousel_data: dict) -> list:
 
                 wrapped_pt = wrap_text(pt, p_font, max_p_width, draw)
                 for line_i, line in enumerate(wrapped_pt):
-                    if py > box_bottom - 50:
+                    if py > box_bottom - 45:
                         break
 
                     if line_i == 0:
-                        # Draw bullet dot ONLY on the first line
                         draw.ellipse([100, py + 12, 112, py + 24], fill=bullet_color)
                         draw.text((128, py), line, fill=THEME["body"], font=p_font)
                     else:
-                        # Indent subsequent wrapped lines without any bullet dot
                         draw.text((128, py), line, fill=THEME["body"], font=p_font)
 
-                    py += 48
+                    py += 46
 
-                # Paragraph gap between points
                 py += 24
 
-            draw_footer(draw, is_cover=False, is_hindi=is_hi_detail)
+            draw_official_footer(draw, is_cover=False, is_hindi=is_hi_detail)
 
         slide_file = OUTPUT_DIR / f"slide_{uuid.uuid4().hex[:8]}_{idx}.png"
-        img.save(str(slide_file), "PNG", quality=95)
+        canvas.save(str(slide_file), "PNG", quality=95)
         slide_paths.append(str(slide_file))
 
     return slide_paths
