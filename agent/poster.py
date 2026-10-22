@@ -26,7 +26,7 @@ def check_rate_limit_and_throttle(is_emergency: bool = False):
     """Enforces rate-limit guardrails to protect the Instagram account from shadowbans."""
     global LAST_PUBLISH_TIME
     if is_emergency:
-        # Tier 1 Breaking News bypasses routine wait
+        # Tier 1 Breaking News or Manual Triggers bypass routine wait
         LAST_PUBLISH_TIME = time.time()
         return
 
@@ -52,21 +52,21 @@ def _parse_meta_error(result: subprocess.CompletedProcess) -> str:
     except Exception:
         pass
 
-    if any(k in raw for k in ["Session has expired", "Cannot call API for app", "Error validating access token", "OAuthException"]):
+    if any(k in raw for k in ["Session has expired", "Cannot call API for app", "Error validating access token", "OAuthException", "190", "200"]):
         return (
             "Meta Instagram Access Token has EXPIRED or lacks permission! "
             f"(Meta Error: {raw}). "
-            "Please generate a fresh User/Page Access Token from Meta Graph API Explorer and update INSTAGRAM_ACCESS_TOKEN."
+            "Please generate a fresh User/Page Access Token from Meta Graph API Explorer and update INSTAGRAM_ACCESS_TOKEN via the dashboard or .env."
         )
     return raw
 
-def publish_to_instagram(image_url: str, caption: str, is_emergency: bool = False) -> str:
+def publish_to_instagram(image_url: str, caption: str, is_emergency: bool = False, is_manual: bool = False) -> str:
     """Publishes a single image card."""
     if not is_credentials_ready():
         print("  [Poster] Meta credentials not set or placeholder. Operating in DRY RUN mode.")
         return f"mock_ig_media_{int(time.time())}"
 
-    check_rate_limit_and_throttle(is_emergency=is_emergency)
+    check_rate_limit_and_throttle(is_emergency=(is_emergency or is_manual))
 
     env = os.environ.copy()
     env["INSTAGRAM_ACCESS_TOKEN"] = INSTAGRAM_ACCESS_TOKEN
@@ -84,13 +84,13 @@ def publish_to_instagram(image_url: str, caption: str, is_emergency: bool = Fals
         return data["media_id"]
     raise RuntimeError(f"Publish failed: {data}")
 
-def publish_carousel_to_instagram(image_urls: List[str], caption: str, is_emergency: bool = False) -> str:
+def publish_carousel_to_instagram(image_urls: List[str], caption: str, is_emergency: bool = False, is_manual: bool = False) -> str:
     """Publishes a multi-slide carousel."""
     if not is_credentials_ready():
         print("  [Poster] Meta credentials not set or placeholder. Operating in DRY RUN mode.")
         return f"mock_carousel_media_{int(time.time())}"
 
-    check_rate_limit_and_throttle(is_emergency=is_emergency)
+    check_rate_limit_and_throttle(is_emergency=(is_emergency or is_manual))
 
     env = os.environ.copy()
     env["INSTAGRAM_ACCESS_TOKEN"] = INSTAGRAM_ACCESS_TOKEN
@@ -108,13 +108,13 @@ def publish_carousel_to_instagram(image_urls: List[str], caption: str, is_emerge
         return data["media_id"]
     raise RuntimeError(f"Carousel publish failed: {data}")
 
-def publish_reel_to_instagram(video_url: str, caption: str, audio_name: str = "", is_emergency: bool = True) -> str:
+def publish_reel_to_instagram(video_url: str, caption: str, audio_name: str = "", is_emergency: bool = True, is_manual: bool = False) -> str:
     """Publishes a 9:16 video reel with audio."""
     if not is_credentials_ready():
         print("  [Poster] Meta credentials not set or placeholder. Operating in DRY RUN mode.")
         return f"mock_reel_media_{int(time.time())}"
 
-    check_rate_limit_and_throttle(is_emergency=is_emergency)
+    check_rate_limit_and_throttle(is_emergency=(is_emergency or is_manual))
 
     env = os.environ.copy()
     env["INSTAGRAM_ACCESS_TOKEN"] = INSTAGRAM_ACCESS_TOKEN

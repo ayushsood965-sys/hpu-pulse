@@ -107,29 +107,54 @@ class StdoutLogInterceptor:
 sys.stdout = StdoutLogInterceptor(sys.stdout, default_level="INFO")
 sys.stderr = StdoutLogInterceptor(sys.stderr, default_level="ERROR")
 
+_token_cache = {"valid": None, "error": None, "checked_at": 0}
+
+def check_meta_token_status(token: str) -> dict:
+    global _token_cache
+    now = time.time()
+    if _token_cache["checked_at"] and (now - _token_cache["checked_at"] < 30) and _token_cache["valid"] is not None:
+        return _token_cache
+
+    if not token or token.startswith("your_"):
+        _token_cache = {"valid": False, "error": "No token configured in .env", "checked_at": now}
+        return _token_cache
+
+    try:
+        import requests
+        res = requests.get(f"https://graph.facebook.com/v21.0/me?access_token={token}", timeout=4)
+        data = res.json()
+        if "error" in data:
+            err_msg = data["error"].get("message", "Token expired or invalid")
+            _token_cache = {"valid": False, "error": err_msg, "checked_at": now}
+        else:
+            _token_cache = {"valid": True, "name": data.get("name"), "id": data.get("id"), "checked_at": now}
+    except Exception as e:
+        _token_cache = {"valid": False, "error": str(e), "checked_at": now}
+    return _token_cache
+
 def safe_crawl_cycle():
     try:
         run_automated_crawler_cycle()
     except Exception as e:
         log_event(f"❌ 6-Hour Automated Crawler Failed: {e}", level="ERROR")
 
-def safe_scheduled_post_cycle(dry_run: bool = False):
+def safe_scheduled_post_cycle(dry_run: bool = False, is_manual: bool = False):
     try:
-        execute_scheduled_publishing_cycle(dry_run=dry_run)
+        execute_scheduled_publishing_cycle(dry_run=dry_run, is_manual=is_manual)
     except Exception as e:
-        log_event(f"❌ 12-Hour Scheduled Post Cycle Failed: {e}", level="ERROR")
+        log_event(f"❌ Post Cycle Failed: {e}", level="ERROR")
 
-def safe_carousel_cycle(items=None, category=None, dry_run=False):
+def safe_carousel_cycle(items=None, category=None, dry_run=False, is_manual=True):
     try:
-        publish_routine_carousel_cycle(items, category, dry_run)
+        publish_routine_carousel_cycle(items=items, category=category, dry_run=dry_run, is_manual=is_manual)
     except Exception as e:
         log_event(f"❌ Routine Carousel Publish Failed: {e}", level="ERROR")
 
-def safe_reel_cycle(item=None, dry_run=False):
+def safe_reel_cycle(item=None, dry_run=False, is_manual=True):
     try:
-        publish_breaking_reel_cycle(item, dry_run)
+        publish_breaking_reel_cycle(item=item, dry_run=dry_run, is_manual=is_manual)
     except Exception as e:
-        log_event(f"❌ Breaking Reel Publish Failed: {e}", level="ERROR")
+        log_event(f"❌ Video Reel Publish Failed: {e}", level="ERROR")
 
 def safe_comments_cycle():
     try:
@@ -344,6 +369,8 @@ def get_status(request: Request, authorization: Optional[str] = Header(None), hp
             pass
 
     daily_posts = get_daily_published_count()
+    import agent.config as cfg
+    token_status = check_meta_token_status(cfg.INSTAGRAM_ACCESS_TOKEN)
 
     return {
         "status": "Running" if agent_manager.is_running else "Stopped",
@@ -352,6 +379,7 @@ def get_status(request: Request, authorization: Optional[str] = Header(None), hp
         "uptime_seconds": uptime_seconds,
         "last_action": agent_manager.last_action,
         "instagram_handle": INSTAGRAM_HANDLE,
+        "token_status": token_status,
         "total_indexed": total_indexed,
         "published_count": published_count,
         "queued_count": queued_count,
@@ -407,6 +435,9 @@ def update_instagram_token(req: TokenUpdateRequest, request: Request, authorizat
     pst.INSTAGRAM_ACCESS_TOKEN = new_token
     os.environ["INSTAGRAM_ACCESS_TOKEN"] = new_token
 
+    global _token_cache
+    _token_cache = {"valid": None, "error": None, "checked_at": 0}
+
     if req.account_id and req.account_id.strip():
         cfg.INSTAGRAM_ACCOUNT_ID = req.account_id.strip()
         pst.INSTAGRAM_ACCOUNT_ID = req.account_id.strip()
@@ -447,24 +478,32 @@ def trigger_crawl(background_tasks: BackgroundTasks, request: Request, authoriza
     if not verify_auth(request, authorization, hpu_auth_session):
         return JSONResponse(status_code=401, content={"error": "Unauthorized"})
     log_event("⚡ Manual Crawl Triggered from Admin Dashboard...")
-    background_tasks.add_task(safe_crawl_cycle, False)
-    return {"message": "30-Minute Multi-Source Crawl Dispatched!"}
+    background_tasks.add_task(safe_crawl_cycle)
+    return {"message": "Multi-Source Crawl Dispatched!"}
+
+@app.post("/api/publish-queue-now")
+def trigger_queue_post(background_tasks: BackgroundTasks, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    log_event("⚡ Manual Post Queue Triggered (No daily limit • 1-2 Reel / 3+ Carousel)...")
+    background_tasks.add_task(safe_scheduled_post_cycle, False, True)
+    return {"message": "Instant Queue Post Dispatched (No Daily Limit)!"}
 
 @app.post("/api/publish-carousel-now")
 def trigger_carousel(background_tasks: BackgroundTasks, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
     if not verify_auth(request, authorization, hpu_auth_session):
         return JSONResponse(status_code=401, content={"error": "Unauthorized"})
-    log_event("⚡ Manual Routine Carousel Publish Triggered from Admin Dashboard...")
-    background_tasks.add_task(safe_carousel_cycle, None, None, False)
-    return {"message": "Routine Carousel Batch Dispatched!"}
+    log_event("⚡ Manual Carousel Publish Triggered (Instant Live Post)...")
+    background_tasks.add_task(safe_carousel_cycle, None, None, False, True)
+    return {"message": "Instant Carousel Post Dispatched to Live Instagram!"}
 
 @app.post("/api/publish-reel-now")
 def trigger_reel(background_tasks: BackgroundTasks, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
     if not verify_auth(request, authorization, hpu_auth_session):
         return JSONResponse(status_code=401, content={"error": "Unauthorized"})
-    log_event("⚡ Manual Breaking Reel Publish Triggered from Admin Dashboard...")
-    background_tasks.add_task(safe_reel_cycle, None, False)
-    return {"message": "Breaking Reel Generation Dispatched!"}
+    log_event("⚡ Manual Video Reel Publish Triggered (Instant Live Post)...")
+    background_tasks.add_task(safe_reel_cycle, None, False, True)
+    return {"message": "Instant Video Reel Dispatched to Live Instagram!"}
 
 @app.post("/api/scan-comments")
 def trigger_comments(background_tasks: BackgroundTasks, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):

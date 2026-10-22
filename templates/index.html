@@ -661,11 +661,25 @@
       </div>
     </div>
 
+    <!-- Meta Token Expiry Alert Banner -->
+    <div id="meta-token-warning" style="display: none; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 14px; padding: 14px 20px; margin-bottom: 24px; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 24px;">⚠️</span>
+        <div>
+          <strong style="color: #F87171; font-size: 14px;">Meta Instagram Token Expired / Needs Renewal</strong>
+          <div id="meta-token-error-desc" style="color: #9CA3AF; font-size: 12px; margin-top: 2px;">Meta OAuth rejected API requests. Click update to paste a fresh token.</div>
+        </div>
+      </div>
+      <button class="btn" style="background: #EF4444; color: #FFF; font-weight: 700; border: none; padding: 8px 16px;" onclick="openTokenModal()">
+        Update Meta Token
+      </button>
+    </div>
+
     <!-- Quick Action Controls -->
     <div class="action-panel">
-      <div class="section-title">⚡ Instant Workflow Triggers (6h Crawl • 12h Post Cycle • Max 2 Daily)</div>
+      <div class="section-title">⚡ Instant Workflow Triggers (Manual Posting Has No Limits)</div>
       <div class="action-grid">
-        <div class="action-btn" onclick="triggerAction('/api/crawl-now', '6-Hour Crawl Cycle Dispatched!')">
+        <div class="action-btn" onclick="triggerAction('/api/crawl-now', 'Multi-Source Crawl Dispatched!')">
           <div class="action-icon">🕷</div>
           <div>
             <div class="action-title">Run 6h Crawl</div>
@@ -673,19 +687,27 @@
           </div>
         </div>
 
-        <div class="action-btn" onclick="triggerAction('/api/publish-carousel-now', '12h Post Triggered (1-2: Reel | 3+: Carousel)...')">
-          <div class="action-icon">📚</div>
+        <div class="action-btn" onclick="triggerAction('/api/publish-queue-now', 'Auto Posting Queue (1-2 Reel / 3+ Carousel • No Daily Limit)...')">
+          <div class="action-icon">⚡</div>
           <div>
-            <div class="action-title">Post Queue (12h Cycle)</div>
-            <div class="action-desc">1-2: Video Reel | 3+: Carousel</div>
+            <div class="action-title">Auto Post Queue Now</div>
+            <div class="action-desc">1-2: Video Reel | 3+: Carousel (No limit)</div>
           </div>
         </div>
 
-        <div class="action-btn" onclick="triggerAction('/api/publish-reel-now', 'Generating 9:16 Looping Reel...')">
+        <div class="action-btn" onclick="triggerAction('/api/publish-carousel-now', 'Publishing Carousel Post Instantly to Live Instagram...')">
+          <div class="action-icon">📚</div>
+          <div>
+            <div class="action-title">Publish Carousel Post</div>
+            <div class="action-desc">Push multi-slide carousel live instantly</div>
+          </div>
+        </div>
+
+        <div class="action-btn" onclick="triggerAction('/api/publish-reel-now', 'Generating & Publishing Video Reel Instantly...')">
           <div class="action-icon">🎬</div>
           <div>
-            <div class="action-title">Publish Breaking Reel</div>
-            <div class="action-desc">Render 9:16 vertical video + audio</div>
+            <div class="action-title">Publish Video Reel</div>
+            <div class="action-desc">Push 9:16 vertical video reel live instantly</div>
           </div>
         </div>
 
@@ -895,6 +917,18 @@
       document.getElementById("metric-published").innerText = data.published_count || 0;
       document.getElementById("metric-replies").innerText = data.replies_count || 0;
       document.getElementById("queue-count-badge").innerText = data.queued_count || 0;
+
+      // Meta Token status banner
+      const tokenBanner = document.getElementById("meta-token-warning");
+      const tokenDesc = document.getElementById("meta-token-error-desc");
+      if (data.token_status && data.token_status.valid === false) {
+        tokenBanner.style.display = "flex";
+        if (data.token_status.error) {
+          tokenDesc.innerText = `Meta Error: ${data.token_status.error} — Click to update your Instagram Access Token.`;
+        }
+      } else {
+        tokenBanner.style.display = "none";
+      }
 
       // Render Logs
       const terminal = document.getElementById("terminal-body");

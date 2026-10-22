@@ -17,6 +17,7 @@ from .reel_generator import create_looping_reel
 from .uploader import upload_image, upload_video
 from .poster import publish_to_instagram, publish_carousel_to_instagram, publish_reel_to_instagram, post_first_comment
 from .db import (
+    get_connection,
     get_pending_tier1_items,
     get_waiting_batch_items,
     get_all_waiting_items,
@@ -25,28 +26,42 @@ from .db import (
     mark_items_published
 )
 
-def publish_breaking_reel_cycle(item: Optional[Dict[str, Any]] = None, dry_run: bool = False) -> Optional[Dict[str, Any]]:
+def publish_breaking_reel_cycle(item: Optional[Dict[str, Any]] = None, dry_run: bool = False, is_manual: bool = False) -> Optional[Dict[str, Any]]:
     """
-    Renders and publishes an immediate 9:16 Looped Video Reel with Instagram audio
-    for Tier 1 Emergency / Breaking News (Weather holiday, exam postponed, fee rollback, etc.).
+    Renders and publishes an immediate 9:16 Looped Video Reel with Instagram audio.
+    When triggered manually or automatically, picks the best available item and posts instantly.
     """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"\n[{timestamp}] 🚨 INITIATING TIER 1 BREAKING REEL CYCLE...")
+    mode_tag = "MANUAL REEL" if is_manual else "BREAKING REEL"
+    print(f"\n[{timestamp}] 🚨 INITIATING {mode_tag} CYCLE...")
 
     if not item:
         pending = get_pending_tier1_items()
-        if not pending:
-            print("  No pending Tier 1 items to publish right now.")
-            return None
-        item = pending[0]
+        if pending:
+            item = pending[0]
+        else:
+            waiting = get_all_waiting_items()
+            if waiting:
+                item = waiting[0]
+            else:
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM scraped_items ORDER BY id DESC LIMIT 1")
+                row = cursor.fetchone()
+                conn.close()
+                if row:
+                    item = dict(row)
+                else:
+                    print("  No items found in database to publish as video reel.")
+                    return None
 
     item_id = item.get("id")
-    print(f"  Processing breaking update [ID: {item_id}]: {item.get('title')[:70]}")
+    print(f"  Processing update for reel [ID: {item_id}]: {item.get('title')[:70]}")
 
     # Step 1: AI Synthesis
     ai_content = classify_and_synthesize_update(item)
     headline = ai_content.get("headline", item.get("title")[:60])
-    badge = ai_content.get("badge", "🔴 BREAKING ALERT")
+    badge = ai_content.get("badge", "🔴 BREAKING ALERT" if item.get("priority") == "TIER1_BREAKING" else "📢 LATEST UPDATE")
     caption = ai_content.get("caption", f"📢 {badge}: {headline}")
     audio_id = ai_content.get("audio_track_id", "cornfield_chase")
 
@@ -80,8 +95,8 @@ def publish_breaking_reel_cycle(item: Optional[Dict[str, Any]] = None, dry_run: 
     else:
         print(f"  Sending video reel to Meta Instagram Graph API...")
         try:
-            media_id = publish_reel_to_instagram(video_url, caption, audio_name=audio_name, is_emergency=True)
-            print(f"  ✔ BREAKING REEL PUBLISHED TO INSTAGRAM! Media ID: {media_id}")
+            media_id = publish_reel_to_instagram(video_url, caption, audio_name=audio_name, is_emergency=True, is_manual=is_manual)
+            print(f"  ✔ VIDEO REEL PUBLISHED TO INSTAGRAM! Media ID: {media_id}")
 
             # Post friendly student comment
             first_comment = (
@@ -96,8 +111,8 @@ def publish_breaking_reel_cycle(item: Optional[Dict[str, Any]] = None, dry_run: 
     # Record in DB
     record_published_post(
         post_type="REEL",
-        tier="TIER1_BREAKING",
-        category=item.get("category", "BREAKING"),
+        tier="TIER1_BREAKING" if item.get("priority") == "TIER1_BREAKING" else "TIER2_ROUTINE",
+        category=item.get("category", "GENERAL"),
         headline=headline,
         caption=caption,
         media_urls=[video_url],
@@ -114,19 +129,30 @@ def publish_breaking_reel_cycle(item: Optional[Dict[str, Any]] = None, dry_run: 
         "audio_track": audio_name
     }
 
-def publish_routine_carousel_cycle(items: Optional[List[Dict[str, Any]]] = None, category: Optional[str] = None, dry_run: bool = False) -> Optional[Dict[str, Any]]:
+def publish_routine_carousel_cycle(items: Optional[List[Dict[str, Any]]] = None, category: Optional[str] = None, dry_run: bool = False, is_manual: bool = False) -> Optional[Dict[str, Any]]:
     """
     Renders and publishes a 1080x1350 multi-slide Instagram Carousel
-    batching together similar routine academic notices (Results, Merit lists, Datesheets).
+    batching together similar academic notices (Results, Merit lists, Datesheets, General updates).
     """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"\n[{timestamp}] 📚 INITIATING TIER 2 ROUTINE CAROUSEL BATCH CYCLE...")
+    mode_tag = "MANUAL CAROUSEL" if is_manual else "ROUTINE CAROUSEL BATCH"
+    print(f"\n[{timestamp}] 📚 INITIATING {mode_tag} CYCLE...")
 
     if not items:
         waiting = get_waiting_batch_items(category=category)
         if not waiting:
-            print("  No waiting batch items in queue.")
-            return None
+            waiting = get_all_waiting_items()
+        if not waiting:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM scraped_items ORDER BY id DESC LIMIT 4")
+            rows = cursor.fetchall()
+            conn.close()
+            if rows:
+                waiting = [dict(r) for r in rows]
+            else:
+                print("  No waiting items in queue or database for carousel.")
+                return None
         # Batch top 2 to 4 items
         items = waiting[:4]
 
@@ -158,7 +184,7 @@ def publish_routine_carousel_cycle(items: Optional[List[Dict[str, Any]]] = None,
     else:
         print(f"  Sending multi-slide container to Meta Instagram Graph API...")
         try:
-            media_id = publish_carousel_to_instagram(image_urls, caption, is_emergency=False)
+            media_id = publish_carousel_to_instagram(image_urls, caption, is_emergency=is_manual, is_manual=is_manual)
             print(f"  ✔ CAROUSEL PUBLISHED TO INSTAGRAM! Media ID: {media_id}")
 
             # Post first student prompt comment
@@ -203,40 +229,52 @@ def run_automated_crawler_cycle() -> int:
     print(f"  ✔ 6-Hour crawl finished: {len(new_items)} fresh updates indexed into queue.")
     return len(new_items)
 
-def execute_scheduled_publishing_cycle(dry_run: bool = False) -> Optional[Dict[str, Any]]:
+def execute_scheduled_publishing_cycle(dry_run: bool = False, is_manual: bool = False) -> Optional[Dict[str, Any]]:
     """
-    Executed every 12 hours (maximum 2 posts daily):
-    - Strict Daily Cap: Maximum 2 published posts per calendar day.
-    - If 1 to 2 updates in queue -> formats and publishes as a 9:16 LOOPING VIDEO REEL with audio.
-    - If multiple (3 or more) updates in queue -> formats and bundles into a categorized CAROUSEL ALBUM.
+    Publishing Cycle:
+    - Automatic mode (Scheduled every 12 hours): Strict limit of MAX_DAILY_POSTS (2/day).
+    - Manual mode (Admin triggered): NO daily limit! Posts instantly.
+    - Rule:
+        * If 1 to 2 updates in queue -> formats and publishes as a 9:16 LOOPING VIDEO REEL with audio.
+        * If multiple (3 or more) updates in queue -> formats and bundles into a CAROUSEL ALBUM.
     """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     daily_count = get_daily_published_count()
 
-    if daily_count >= MAX_DAILY_POSTS and not dry_run:
+    if not is_manual and daily_count >= MAX_DAILY_POSTS and not dry_run:
         print(f"\n[{timestamp}] ⏸️ [Scheduler] Daily cap reached ({daily_count}/{MAX_DAILY_POSTS} posts published today). Skipping 12-hour window.")
         return None
 
     waiting_items = get_all_waiting_items()
     if not waiting_items:
-        print(f"\n[{timestamp}] 📭 [Scheduler] No pending updates in queue for this 12-hour publishing cycle.")
-        return None
+        if is_manual:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM scraped_items ORDER BY id DESC LIMIT 5")
+            rows = cursor.fetchall()
+            conn.close()
+            if rows:
+                waiting_items = [dict(r) for r in rows]
+        if not waiting_items:
+            print(f"\n[{timestamp}] 📭 No pending updates in queue for this publishing cycle.")
+            return None
 
     total_waiting = len(waiting_items)
-    print(f"\n[{timestamp}] ⏰ INITIATING 12-HOUR SCHEDULED POSTING CYCLE...")
-    print(f"  Current daily status: {daily_count}/{MAX_DAILY_POSTS} posts published today.")
+    mode_str = "MANUAL POST (NO DAILY LIMIT)" if is_manual else "12-HOUR SCHEDULED POST"
+    print(f"\n[{timestamp}] ⏰ INITIATING {mode_str} CYCLE...")
+    print(f"  Current daily status: {daily_count}/{MAX_DAILY_POSTS} posts published today (Manual bypass: {is_manual}).")
     print(f"  Queue contains {total_waiting} pending update(s).")
 
     if total_waiting <= 2:
         # User Mandate: 1-2 updates -> Looping video reel
         chosen_item = waiting_items[0]
         print(f"  ⚡ {total_waiting} update(s) detected (1-2 threshold) -> Publishing as LOOPING VIDEO REEL with background audio...")
-        return publish_breaking_reel_cycle(chosen_item, dry_run=dry_run)
+        return publish_breaking_reel_cycle(chosen_item, dry_run=dry_run, is_manual=is_manual)
     else:
         # User Mandate: Multiple (3+) updates -> Multi-slide carousel album
         batch = waiting_items[:5]
         print(f"  📚 {total_waiting} updates detected (Multiple threshold) -> Bundling {len(batch)} circulars into a CAROUSEL ALBUM...")
-        return publish_routine_carousel_cycle(items=batch, dry_run=dry_run)
+        return publish_routine_carousel_cycle(items=batch, dry_run=dry_run, is_manual=is_manual)
 
 # Backward-compatibility alias
 run_automated_check_and_post_cycle = execute_scheduled_publishing_cycle
