@@ -347,7 +347,7 @@ def draw_official_footer(draw: ImageDraw.ImageDraw, is_cover: bool = False, is_h
     draw.text(((WIDTH - fw) / 2, HEIGHT - 100), handle_text, fill=THEME["footer"], font=f_font)
 
     sub_font = get_font("medium", 19, is_hindi=is_hindi)
-    sub_text = "यह पोस्ट सेव करें  •  सहपाठियों के साथ शेयर करें" if is_hindi else "Save this post  •  Share with your classmates"
+    sub_text = "यह पोस्ट सेव करें और सहपाठियों के साथ शेयर करें" if is_hindi else "Save this post  •  Share with your classmates"
     s_bbox = draw.textbbox((0, 0), sub_text, font=sub_font)
     sw = s_bbox[2] - s_bbox[0]
     draw.text(((WIDTH - sw) / 2, HEIGHT - 68), sub_text, fill=THEME["dim"], font=sub_font)
