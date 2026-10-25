@@ -23,6 +23,11 @@ from .config import (
 )
 from .db import (
     is_curated_reel_seen,
+    is_reel_already_published,
+    is_video_hash_published,
+    claim_reel_for_publishing,
+    update_curated_reel_video_hash,
+    normalize_reel_shortcode,
     save_curated_reel,
     get_daily_curated_reels_count,
     get_pending_curated_reels,
@@ -38,15 +43,30 @@ from .db import (
 )
 from .poster import publish_reel_to_instagram
 from .uploader import upload_video
+import hashlib
 
 REEL_SHORTCODE_REGEX = re.compile(r"instagram\.com/(?:reel|p|reels)/([A-Za-z0-9_-]+)", re.IGNORECASE)
 
+def compute_file_sha256(file_path: str) -> str:
+    """Computes SHA-256 hash of a local video file for bulletproof content deduplication."""
+    if not file_path or not Path(file_path).exists():
+        return ""
+    hasher = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
 def extract_reel_shortcode(url: str) -> Optional[str]:
-    """Extracts the Instagram shortcode from any post or reel URL."""
+    """Extracts and normalizes the Instagram shortcode from any post or reel URL."""
     if not url:
         return None
-    match = REEL_SHORTCODE_REGEX.search(url)
-    return match.group(1) if match else None
+    clean = re.sub(r"\?.*$", "", str(url).strip())
+    match = REEL_SHORTCODE_REGEX.search(clean)
+    if match:
+        return match.group(1).strip()
+    return None
+
 
 def clean_handle(handle: str) -> str:
     """Removes leading @ and trims handle."""
@@ -269,9 +289,10 @@ def scan_target_handles_for_reels(force_for_test: bool = False, lookback_days: i
                     continue
 
                 direct_url = decoded.get("decoded_url")
-                shortcode = extract_reel_shortcode(direct_url)
-                if not shortcode or is_curated_reel_seen(shortcode):
+                shortcode = normalize_reel_shortcode(extract_reel_shortcode(direct_url))
+                if not shortcode or is_curated_reel_seen(shortcode, direct_url) or is_reel_already_published(shortcode, direct_url):
                     continue
+
 
                 # Inspect reel metadata via yt-dlp
                 meta = fetch_reel_metadata_and_download(direct_url, download=False)
@@ -331,13 +352,27 @@ def generate_curation_caption(meta: Dict[str, Any]) -> str:
 
 def publish_curated_reel_record(reel_record: Dict[str, Any], dry_run: bool = False) -> bool:
     """
-    Downloads the MP4 file (if needed), hosts it on SERVER_URL,
-    and publishes the reel to @hpu.pulse via Meta Graph API.
+    Downloads the MP4 file (if needed), verifies binary SHA-256 content uniqueness,
+    hosts it on SERVER_URL, and publishes the reel to @hpu.pulse via Meta Graph API.
+    Guarantees no reel is EVER uploaded or posted twice.
     """
     reel_id = reel_record.get("id")
     url = reel_record.get("instagram_url")
-    shortcode = reel_record.get("shortcode")
-    handle = reel_record.get("uploader_handle")
+    shortcode = normalize_reel_shortcode(reel_record.get("shortcode") or extract_reel_shortcode(url))
+    handle = reel_record.get("uploader_handle") or "creator"
+
+    # Step 0: Check if this reel is already published
+    if is_reel_already_published(shortcode, url):
+        print(f"[ReelsCurator] 🛑 DUPLICATE BLOCKED: Reel ({shortcode}) has ALREADY been published to Instagram! Skipping.")
+        if reel_id:
+            update_curated_reel_status(reel_id, "PUBLISHED")
+        return False
+
+    # Step 0b: Atomic concurrency lock (guarantees only 1 worker publishes this reel)
+    if reel_id:
+        if not claim_reel_for_publishing(reel_id):
+            print(f"[ReelsCurator] ⚠️ Reel #{reel_id} ({shortcode}) is already locked in PUBLISHING state by another task. Skipping.")
+            return False
 
     today_str = datetime.now().strftime("%Y-%m-%d")
     today_count = get_daily_curated_reels_count(today_str)
@@ -345,7 +380,8 @@ def publish_curated_reel_record(reel_record: Dict[str, Any], dry_run: bool = Fal
     if today_count >= MAX_DAILY_REEL_UPLOADS:
         tomorrow_str = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
         print(f"[ReelsCurator] 🛑 Daily quota reached ({today_count}/{MAX_DAILY_REEL_UPLOADS}). Moving #{reel_id} to tomorrow ({tomorrow_str}).")
-        update_curated_reel_status(reel_id, "QUEUED_FOR_NEXT_DAY", target_post_date=tomorrow_str)
+        if reel_id:
+            update_curated_reel_status(reel_id, "QUEUED_FOR_NEXT_DAY", target_post_date=tomorrow_str)
         return False
 
     print(f"\n[ReelsCurator] 🚀 Publishing Curated Reel #{reel_id} ({shortcode}) from @{handle}...")
@@ -357,9 +393,27 @@ def publish_curated_reel_record(reel_record: Dict[str, Any], dry_run: bool = Fal
         download_meta = fetch_reel_metadata_and_download(url, download=True)
         if not download_meta or not download_meta.get("local_video_path"):
             print(f"  ❌ Failed to download video for {url}")
-            update_curated_reel_status(reel_id, "FAILED")
+            if reel_id:
+                update_curated_reel_status(reel_id, "FAILED")
             return False
         local_path = download_meta["local_video_path"]
+
+    # 1b. Compute and verify binary SHA-256 hash of the video file
+    video_hash = compute_file_sha256(local_path)
+    if video_hash:
+        if is_video_hash_published(video_hash):
+            print(f"[ReelsCurator] 🛑 DUPLICATE BLOCKED: Video binary SHA-256 hash ({video_hash[:12]}...) was ALREADY published to Instagram! Deleting file and aborting.")
+            try:
+                if local_path and Path(local_path).exists():
+                    os.remove(local_path)
+            except Exception:
+                pass
+            if reel_id:
+                update_curated_reel_status(reel_id, "DUPLICATE_VIDEO_HASH")
+            return False
+
+        if reel_id:
+            update_curated_reel_video_hash(reel_id, video_hash)
 
     # 2. Form publicly accessible URL
     video_filename = Path(local_path).name
@@ -373,16 +427,23 @@ def publish_curated_reel_record(reel_record: Dict[str, Any], dry_run: bool = Fal
     if dry_run:
         fake_id = f"dry_run_curated_{shortcode}"
         print(f"  [DRY RUN] Would publish reel to Instagram. Fake Media ID: {fake_id}")
-        mark_curated_reel_published(reel_id, fake_id)
+        if reel_id:
+            mark_curated_reel_published(reel_id, fake_id)
         record_published_post(
             post_type="REEL",
             tier="CURATED_REEL",
             category="CAMPUS_REELS",
-            headline=f"Reel via @{handle}",
+            headline=f"Reel via @{handle} ({shortcode})",
             caption=caption,
             media_urls=[public_video_url],
-            instagram_media_id=fake_id
+            instagram_media_id=fake_id,
+            video_hash=video_hash
         )
+        try:
+            if local_path and Path(local_path).exists():
+                os.remove(local_path)
+        except Exception:
+            pass
         return True
 
     # 5. Meta Graph API Publishing
@@ -400,17 +461,19 @@ def publish_curated_reel_record(reel_record: Dict[str, Any], dry_run: bool = Fal
 
     if media_id:
         print(f"  🎉 Successfully published reel on Instagram! Media ID: {media_id}")
-        mark_curated_reel_published(reel_id, media_id)
+        if reel_id:
+            mark_curated_reel_published(reel_id, media_id)
         record_published_post(
             post_type="REEL",
             tier="CURATED_REEL",
             category="CAMPUS_REELS",
-            headline=f"Reel via @{handle}",
+            headline=f"Reel via @{handle} ({shortcode})",
             caption=caption,
             media_urls=[public_video_url],
-            instagram_media_id=media_id
+            instagram_media_id=media_id,
+            video_hash=video_hash
         )
-        # Auto-cleanup: remove local video file to maintain near-zero disk usage
+        # Auto-cleanup: remove local video file to maintain zero disk usage
         try:
             if local_path and Path(local_path).exists():
                 os.remove(local_path)
@@ -420,7 +483,13 @@ def publish_curated_reel_record(reel_record: Dict[str, Any], dry_run: bool = Fal
         return True
     else:
         print(f"  ❌ Meta Graph API publishing failed for reel #{reel_id}.")
-        update_curated_reel_status(reel_id, "FAILED")
+        if reel_id:
+            update_curated_reel_status(reel_id, "FAILED")
+        try:
+            if local_path and Path(local_path).exists():
+                os.remove(local_path)
+        except Exception:
+            pass
         return False
 
 def process_curated_reels_queue(dry_run: bool = False, max_to_post: int = 1) -> int:
@@ -449,6 +518,12 @@ def process_curated_reels_queue(dry_run: bool = False, max_to_post: int = 1) -> 
     for reel in pending:
         if posted_count >= remaining_quota:
             break
+        # Guard against any duplicate reel that slipped past prior checks
+        if is_reel_already_published(reel.get("shortcode"), reel.get("instagram_url")):
+            print(f"[ReelsCurator] 🛑 Skipping reel #{reel['id']} ({reel.get('shortcode')}): Already marked as published.")
+            update_curated_reel_status(reel["id"], "PUBLISHED")
+            continue
+
         success = publish_curated_reel_record(reel, dry_run=dry_run)
         if success:
             posted_count += 1
@@ -459,12 +534,12 @@ def process_curated_reels_queue(dry_run: bool = False, max_to_post: int = 1) -> 
 
 def manually_enqueue_reel(url: str, force: bool = False) -> Dict[str, Any]:
     """Allows manual link input from the dashboard."""
-    shortcode = extract_reel_shortcode(url)
+    shortcode = normalize_reel_shortcode(extract_reel_shortcode(url))
     if not shortcode:
         return {"success": False, "error": "Invalid Instagram Reel URL"}
 
-    if is_curated_reel_seen(shortcode) and not force:
-        return {"success": False, "error": f"Reel ({shortcode}) has already been recorded in database"}
+    if (is_curated_reel_seen(shortcode, url) or is_reel_already_published(shortcode, url)) and not force:
+        return {"success": False, "error": f"Reel ({shortcode}) has already been recorded or published in database"}
 
     meta = fetch_reel_metadata_and_download(url, download=False)
     if not meta:
@@ -494,10 +569,13 @@ def manually_enqueue_reel(url: str, force: bool = False) -> Dict[str, Any]:
     return {"success": True, "reel": meta}
 
 def crawl_and_publish_single_reel_now(url: str, force: bool = True) -> Dict[str, Any]:
-    """Crawls/downloads a specific reel URL and immediately publishes it to Instagram."""
-    shortcode = extract_reel_shortcode(url)
+    """Crawls/downloads a specific reel URL and immediately publishes it to Instagram with strict deduplication."""
+    shortcode = normalize_reel_shortcode(extract_reel_shortcode(url))
     if not shortcode:
         return {"success": False, "error": "Invalid Instagram Reel URL"}
+
+    if is_reel_already_published(shortcode, url):
+        return {"success": False, "error": f"Reel ({shortcode}) has ALREADY been published to Instagram. Duplicate posting prevented."}
 
     print(f"\n[ReelsCurator] 🚀 Direct Crawl & Publish Triggered for: {url}")
     meta = fetch_reel_metadata_and_download(url, download=False)
@@ -509,10 +587,13 @@ def crawl_and_publish_single_reel_now(url: str, force: bool = True) -> Dict[str,
     if not reel_id:
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM curated_reels WHERE shortcode = ?", (shortcode,))
+        cursor.execute("SELECT id, status FROM curated_reels WHERE shortcode = ?", (shortcode,))
         row = cursor.fetchone()
         conn.close()
-        reel_id = row["id"] if row else None
+        if row:
+            if row["status"] == "PUBLISHED":
+                return {"success": False, "error": f"Reel ({shortcode}) has already been published to Instagram."}
+            reel_id = row["id"]
 
     if not reel_id:
         return {"success": False, "error": "Database error registering reel"}
@@ -522,7 +603,8 @@ def crawl_and_publish_single_reel_now(url: str, force: bool = True) -> Dict[str,
     if success:
         return {"success": True, "message": f"Successfully published reel {shortcode} to Instagram!", "reel": meta}
     else:
-        return {"success": False, "error": "Meta Graph API publishing failed", "reel": meta}
+        return {"success": False, "error": "Publishing rejected or Meta Graph API error (check server logs)", "reel": meta}
+
 
 # =========================================================================
 # Public / Other Users Viral Reel Discovery Pipeline (Hashtag / Geotag Radar)
@@ -601,9 +683,10 @@ def scan_public_user_reels(lookback_days: int = REELS_LOOKBACK_DAYS) -> List[Dic
                     continue
 
                 direct_url = decoded.get("decoded_url")
-                shortcode = extract_reel_shortcode(direct_url)
-                if not shortcode or is_curated_reel_seen(shortcode):
+                shortcode = normalize_reel_shortcode(extract_reel_shortcode(direct_url))
+                if not shortcode or is_curated_reel_seen(shortcode, direct_url) or is_reel_already_published(shortcode, direct_url):
                     continue
+
 
                 # Extract reel metadata via yt-dlp
                 meta = fetch_reel_metadata_and_download(direct_url, download=False)
@@ -652,6 +735,10 @@ def publish_single_discovered_reel(reel_id: int, dry_run: bool = False) -> Dict[
     reel_record = get_curated_reel_by_id(reel_id)
     if not reel_record:
         return {"success": False, "error": f"Discovered reel #{reel_id} not found in database"}
+
+    # Strict deduplication check
+    if reel_record.get("status") == "PUBLISHED" or is_reel_already_published(reel_record.get("shortcode"), reel_record.get("instagram_url")):
+        return {"success": False, "error": f"Discovered reel #{reel_id} has ALREADY been published to Instagram."}
 
     print(f"\n[ReelsCurator] 🚀 Publishing user-discovered reel #{reel_id} from @{reel_record.get('uploader_handle')}...")
     success = publish_curated_reel_record(reel_record, dry_run=dry_run)

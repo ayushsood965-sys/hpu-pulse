@@ -1,8 +1,10 @@
 import sqlite3
 import hashlib
 import json
+import re
 from datetime import datetime
 from typing import List, Dict, Optional, Any
+
 from .config import DB_PATH
 from .freshness import is_item_fresh
 
@@ -101,11 +103,26 @@ def init_db():
         )
     """)
 
-    # Migration: Ensure discovery_source column exists in curated_reels
+    # Migration: Ensure discovery_source and video_hash columns exist in curated_reels
     try:
         cursor.execute("ALTER TABLE curated_reels ADD COLUMN discovery_source TEXT DEFAULT 'TARGET_CHANNEL'")
     except Exception:
         pass
+    try:
+        cursor.execute("ALTER TABLE curated_reels ADD COLUMN video_hash TEXT")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE published_posts ADD COLUMN video_hash TEXT")
+    except Exception:
+        pass
+    try:
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_curated_reels_shortcode ON curated_reels(shortcode)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_curated_reels_vhash ON curated_reels(video_hash)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_published_posts_vhash ON published_posts(video_hash)")
+    except Exception:
+        pass
+
 
     # 6. Monitored Instagram Channels Table
     cursor.execute("""
@@ -354,7 +371,8 @@ def record_published_post(
     media_urls: List[str],
     instagram_media_id: str,
     audio_track: Optional[str] = None,
-    scraped_item_ids: Optional[List[int]] = None
+    scraped_item_ids: Optional[List[int]] = None,
+    video_hash: Optional[str] = None
 ) -> int:
     """Stores a successful Instagram post in history."""
     conn = get_connection()
@@ -362,8 +380,8 @@ def record_published_post(
     cursor.execute("""
         INSERT INTO published_posts (
             post_type, tier, category, headline, caption,
-            media_urls_json, instagram_media_id, audio_track, scraped_item_ids_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            media_urls_json, instagram_media_id, audio_track, scraped_item_ids_json, video_hash
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         post_type,
         tier,
@@ -373,7 +391,8 @@ def record_published_post(
         json.dumps(media_urls),
         instagram_media_id,
         audio_track,
-        json.dumps(scraped_item_ids or [])
+        json.dumps(scraped_item_ids or []),
+        video_hash
     ))
     post_id = cursor.lastrowid
     conn.commit()
@@ -439,21 +458,142 @@ def get_all_waiting_items() -> List[Dict[str, Any]]:
 # Curated Reels Helper Functions (Quota, Dedup, Rollover Queue)
 # =========================================================================
 
-def is_curated_reel_seen(shortcode: str) -> bool:
-    """Checks if a reel shortcode has already been recorded in curated_reels."""
-    if not shortcode:
+def normalize_reel_shortcode(shortcode_or_url: str) -> str:
+    """Normalizes an Instagram shortcode or URL by stripping tracking parameters, slashes, and domains."""
+    if not shortcode_or_url:
+        return ""
+    clean = str(shortcode_or_url).strip()
+    clean = re.sub(r"\?.*$", "", clean)  # Strip query params like ?igsh=...
+    clean = re.sub(r"^https?://(?:www\.)?instagram\.com/(?:reel|p|reels)/", "", clean, flags=re.IGNORECASE)
+    clean = clean.strip("/")
+    return clean
+
+def is_curated_reel_seen(shortcode: str, url: Optional[str] = None) -> bool:
+    """
+    Checks if a reel shortcode or URL has already been recorded in curated_reels (any status)
+    OR published in published_posts.
+    """
+    clean_code = normalize_reel_shortcode(shortcode)
+    if not clean_code and not url:
         return False
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM curated_reels WHERE shortcode = ? OR instagram_url LIKE ?", (shortcode, f"%{shortcode}%"))
-    row = cursor.fetchone()
+
+    # 1. Check curated_reels queue & history
+    if clean_code:
+        cursor.execute("SELECT id FROM curated_reels WHERE shortcode = ? OR instagram_url LIKE ?", (clean_code, f"%{clean_code}%"))
+        if cursor.fetchone():
+            conn.close()
+            return True
+
+    if url:
+        clean_url = re.sub(r"\?.*$", "", url).strip().rstrip("/")
+        cursor.execute("SELECT id FROM curated_reels WHERE instagram_url LIKE ?", (f"%{clean_url}%",))
+        if cursor.fetchone():
+            conn.close()
+            return True
+
+    # 2. Cross-table check in published_posts
+    if clean_code:
+        cursor.execute("SELECT id FROM published_posts WHERE post_type = 'REEL' AND (media_urls_json LIKE ? OR caption LIKE ? OR headline LIKE ?)", 
+                       (f"%{clean_code}%", f"%{clean_code}%", f"%{clean_code}%"))
+        if cursor.fetchone():
+            conn.close()
+            return True
+
     conn.close()
-    return row is not None
+    return False
+
+def is_reel_already_published(shortcode: str, url: Optional[str] = None, video_hash: Optional[str] = None) -> bool:
+    """
+    Bulletproof check: Has this reel ALREADY been published to Instagram?
+    Checks status='PUBLISHED' in curated_reels and checks published_posts table.
+    """
+    clean_code = normalize_reel_shortcode(shortcode)
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # 1. Check published curated reels
+    if clean_code:
+        cursor.execute("SELECT id FROM curated_reels WHERE status = 'PUBLISHED' AND (shortcode = ? OR instagram_url LIKE ?)", 
+                       (clean_code, f"%{clean_code}%"))
+        if cursor.fetchone():
+            conn.close()
+            return True
+
+    if video_hash:
+        cursor.execute("SELECT id FROM curated_reels WHERE status = 'PUBLISHED' AND video_hash = ?", (video_hash,))
+        if cursor.fetchone():
+            conn.close()
+            return True
+
+    # 2. Check published_posts table
+    if video_hash:
+        cursor.execute("SELECT id FROM published_posts WHERE video_hash = ?", (video_hash,))
+        if cursor.fetchone():
+            conn.close()
+            return True
+
+    if clean_code:
+        cursor.execute("SELECT id FROM published_posts WHERE post_type = 'REEL' AND (media_urls_json LIKE ? OR caption LIKE ?)",
+                       (f"%{clean_code}%", f"%{clean_code}%"))
+        if cursor.fetchone():
+            conn.close()
+            return True
+
+    conn.close()
+    return False
+
+def is_video_hash_published(video_hash: str) -> bool:
+    """Checks if the exact binary SHA-256 hash of a video file has already been published to Instagram."""
+    if not video_hash:
+        return False
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM published_posts WHERE video_hash = ?", (video_hash,))
+    if cursor.fetchone():
+        conn.close()
+        return True
+    cursor.execute("SELECT id FROM curated_reels WHERE status = 'PUBLISHED' AND video_hash = ?", (video_hash,))
+    if cursor.fetchone():
+        conn.close()
+        return True
+    conn.close()
+    return False
+
+def claim_reel_for_publishing(reel_id: int) -> bool:
+    """
+    Atomic status update: Claims a reel for publishing (sets status='PUBLISHING').
+    Guarantees no race condition or concurrent double-posting between scheduler and manual triggers.
+    Returns True if successfully locked, False if already claimed or published.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE curated_reels
+        SET status = 'PUBLISHING'
+        WHERE id = ? AND status NOT IN ('PUBLISHED', 'PUBLISHING')
+    """, (reel_id,))
+    conn.commit()
+    claimed = cursor.rowcount > 0
+    conn.close()
+    return claimed
+
+def update_curated_reel_video_hash(reel_id: int, video_hash: str):
+    """Saves computed SHA-256 video hash to curated_reels record."""
+    if not video_hash:
+        return
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE curated_reels SET video_hash = ? WHERE id = ?", (video_hash, reel_id))
+    conn.commit()
+    conn.close()
 
 def save_curated_reel(data: Dict[str, Any]) -> Optional[int]:
-    """Saves a qualified curated reel into the queue."""
-    shortcode = data.get("shortcode", "")
-    if is_curated_reel_seen(shortcode):
+    """Saves a qualified curated reel into the queue with deduplication."""
+    shortcode = normalize_reel_shortcode(data.get("shortcode", ""))
+    url = data.get("instagram_url", "")
+    if is_curated_reel_seen(shortcode, url):
         return None
     conn = get_connection()
     cursor = conn.cursor()
@@ -463,8 +603,8 @@ def save_curated_reel(data: Dict[str, Any]) -> Optional[int]:
                 instagram_url, shortcode, uploader_handle, caption,
                 view_count, like_count, comment_count, upload_date,
                 video_url, local_video_path, thumbnail_url, status,
-                target_post_date, discovery_source
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                target_post_date, discovery_source, video_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             data.get("instagram_url", ""),
             shortcode,
@@ -479,7 +619,8 @@ def save_curated_reel(data: Dict[str, Any]) -> Optional[int]:
             data.get("thumbnail_url", ""),
             data.get("status", "PENDING"),
             data.get("target_post_date", datetime.now().strftime("%Y-%m-%d")),
-            data.get("discovery_source", "TARGET_CHANNEL")
+            data.get("discovery_source", "TARGET_CHANNEL"),
+            data.get("video_hash")
         ))
         reel_id = cursor.lastrowid
         conn.commit()

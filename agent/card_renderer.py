@@ -639,19 +639,20 @@ def render_daily_roundup_carousel(news_items: list) -> list:
 
     for idx, item in enumerate(items_to_render, start=1):
         raw_title = clean_display_text(item.get("title", "HPU University Update"))
-        raw_summary = clean_display_text(item.get("summary") or item.get("raw_text") or "")
-
-        # Strictly translate Hindi news to English
-        if is_hindi_text(raw_title) or is_hindi_text(raw_summary):
-            title, points = translate_news_to_english_points(raw_title, raw_summary)
-        else:
-            title = raw_title
-            raw_pts = [p.strip() for p in re.split(r'[.\n|]', raw_summary) if len(p.strip()) > 15]
-            points = raw_pts[:4]
-
+        raw_summary = clean_display_text(item.get("summary") or "")
+        raw_details = clean_display_text(item.get("ocr_text") or item.get("raw_text") or "")
         category = (item.get("category") or "GENERAL").upper()
         if is_hindi_text(category):
             category = "GENERAL"
+
+        # Strictly synthesize full English headline and concrete factual points
+        title, points = translate_news_to_english_points(
+            title=raw_title,
+            summary=raw_summary,
+            details=raw_details,
+            category=category
+        )
+
 
         source = clean_display_text(item.get("source") or "HPU Portal")
         if is_hindi_text(source):

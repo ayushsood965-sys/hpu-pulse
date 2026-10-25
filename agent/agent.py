@@ -318,14 +318,12 @@ def publish_daily_7pm_news_carousel(dry_run: bool = False, is_manual: bool = Fal
     item_ids = [it.get("id") for it in waiting_items if it.get("id")]
     print(f"  Bundling {total_stories} daily news stories for 7 PM Carousel (IDs: {item_ids})...")
 
-    # Step 0: Ensure all news items are translated to English (newspapers, channels, portals)
+    # Step 0: Ensure news item titles are in English for caption generation while preserving rich summary details
     for it in waiting_items:
         t = it.get("title", "")
         if is_hindi_text(t):
             it["title"] = translate_hindi_to_english(t, is_headline=True)
-        s = it.get("summary") or it.get("raw_text") or ""
-        if is_hindi_text(s):
-            it["summary"] = translate_hindi_to_english(s, is_headline=False)
+
 
     # Step 1: Render Carousel Cards (1 slide per story with Headline + Brief explanation in 100% English)
     slide_paths = render_daily_roundup_carousel(waiting_items)
