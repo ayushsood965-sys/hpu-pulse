@@ -49,7 +49,11 @@ from agent.agent import (
     execute_scheduled_publishing_cycle,
     run_automated_check_and_post_cycle
 )
-from agent.reels_curator import manually_enqueue_reel
+from agent.reels_curator import (
+    manually_enqueue_reel,
+    crawl_and_publish_single_reel_now,
+    scan_target_handles_for_reels
+)
 from agent.auto_commenter import process_comments
 from agent.db import (
     init_db,
@@ -61,7 +65,11 @@ from agent.db import (
     skip_curated_reel,
     get_today_queued_news_count,
     get_today_queued_news_items,
-    get_daily_news_carousel_published_today
+    get_daily_news_carousel_published_today,
+    get_monitored_channels,
+    add_monitored_channel,
+    update_monitored_channel,
+    delete_monitored_channel
 )
 
 app = FastAPI(title="HPU Pulse — Autonomous Agent Control Center")
@@ -436,6 +444,9 @@ def get_status(request: Request, authorization: Optional[str] = Header(None), hp
     today_queued_news_count = get_today_queued_news_count()
     carousel_published_today = get_daily_news_carousel_published_today()
 
+    db_channels = get_monitored_channels()
+    active_handles = [c["handle"] for c in db_channels] if db_channels else TARGET_REEL_HANDLES
+
     import agent.config as cfg
     token_status = check_meta_token_status(cfg.INSTAGRAM_ACCESS_TOKEN)
 
@@ -462,8 +473,9 @@ def get_status(request: Request, authorization: Optional[str] = Header(None), hp
         "pending_curated_count": len(pending_curated),
         "reels_date_cutoff": (date.today() - timedelta(days=3)).strftime("%Y-%m-%d"),
         "reels_lookback_days": 3,
-        "monitored_handles_count": len(TARGET_REEL_HANDLES),
-        "monitored_handles": TARGET_REEL_HANDLES,
+        "monitored_handles_count": len(active_handles),
+        "monitored_handles": active_handles,
+        "monitored_channels_list": db_channels,
 
         # 7:00 PM News Carousel Analytics
         "today_queued_news_count": today_queued_news_count,
@@ -613,11 +625,26 @@ class ManualReelRequest(BaseModel):
     url: str
     force: bool = False
 
+class DirectCrawlPublishRequest(BaseModel):
+    url: str
+    force: bool = True
+
+class AddChannelRequest(BaseModel):
+    handle: str
+    category: Optional[str] = "Target HPU Channel"
+    notes: Optional[str] = ""
+
+class EditChannelRequest(BaseModel):
+    id: int
+    handle: str
+    category: Optional[str] = "Target HPU Channel"
+    notes: Optional[str] = ""
+
 @app.post("/api/reels/scan-now")
 def trigger_reels_scan(background_tasks: BackgroundTasks, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
     if not verify_auth(request, authorization, hpu_auth_session):
         return JSONResponse(status_code=401, content={"error": "Unauthorized"})
-    log_event("🔍 Manual Curated Reels Scan Triggered across 40 target handles...")
+    log_event("🔍 Manual Curated Reels Scan Triggered across monitored target channels...")
     background_tasks.add_task(safe_reels_scan_cycle)
     return {"message": "Reels Scan Dispatched in Background!"}
 
@@ -628,6 +655,41 @@ def trigger_reels_post_next(background_tasks: BackgroundTasks, request: Request,
     log_event("⚡ Manual Post of Next Curated Reel Triggered...")
     background_tasks.add_task(safe_reels_post_cycle, False, 1)
     return {"message": "Posting Next Curated Reel Dispatched!"}
+
+@app.post("/api/reels/crawl-and-publish")
+def crawl_and_publish_next(background_tasks: BackgroundTasks, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    """Scans target channels for viral reels from past 3 days and immediately publishes the top qualified reel."""
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    log_event("🚀 Manual Crawl & Immediate Reel Publish Cycle Triggered...")
+    def run_crawl_and_post():
+        try:
+            log_event("🔍 Scanning monitored channels for qualifying 3-day reels...")
+            discovered = scan_target_handles_for_reels(force_for_test=False)
+            log_event(f"🔍 Discovered {len(discovered)} qualified reels. Publishing next reel...")
+            safe_reels_post_cycle(dry_run=False, max_to_post=1)
+        except Exception as e:
+            log_event(f"❌ Error during manual crawl & publish: {e}", level="ERROR")
+    background_tasks.add_task(run_crawl_and_post)
+    return {"message": "Crawl & Publish Cycle Dispatched in Background!"}
+
+@app.post("/api/reels/direct-publish")
+def direct_crawl_and_publish(req: DirectCrawlPublishRequest, background_tasks: BackgroundTasks, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    """Downloads/crawls a specific reel URL and immediately publishes it to Instagram."""
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    log_event(f"🎬 Direct Reel Crawl & Instant Post Requested for: {req.url}")
+    def run_direct():
+        try:
+            res = crawl_and_publish_single_reel_now(req.url, force=req.force)
+            if res.get("success"):
+                log_event(f"🎉 Directly published reel to Instagram!")
+            else:
+                log_event(f"❌ Direct publish failed: {res.get('error')}", level="ERROR")
+        except Exception as e:
+            log_event(f"❌ Direct publish exception: {e}", level="ERROR")
+    background_tasks.add_task(run_direct)
+    return {"message": "Direct Reel Crawl & Instant Publish Dispatched!"}
 
 @app.post("/api/reels/manual-add")
 def manual_add_reel(req: ManualReelRequest, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
@@ -648,6 +710,52 @@ def skip_reel_endpoint(reel_id: int, request: Request, authorization: Optional[s
     skip_curated_reel(reel_id)
     log_event(f"⏭️ Curated Reel #{reel_id} skipped by Admin.")
     return {"message": f"Reel #{reel_id} skipped"}
+
+# =========================================================================
+# Monitored Channels Management API Endpoints
+# =========================================================================
+
+@app.get("/api/channels")
+def list_channels_endpoint(request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    return {"channels": get_monitored_channels()}
+
+@app.post("/api/channels/add")
+def add_channel_endpoint(req: AddChannelRequest, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    clean_h = req.handle.strip().lstrip("@")
+    if not clean_h:
+        return JSONResponse(status_code=400, content={"error": "Handle cannot be empty"})
+    ok = add_monitored_channel(clean_h, req.category, req.notes)
+    if ok:
+        log_event(f"➕ Added monitored channel @{clean_h} ({req.category})")
+        return {"success": True, "message": f"Channel @{clean_h} added successfully"}
+    return JSONResponse(status_code=400, content={"error": f"Channel @{clean_h} already exists or is invalid"})
+
+@app.post("/api/channels/edit")
+def edit_channel_endpoint(req: EditChannelRequest, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    clean_h = req.handle.strip().lstrip("@")
+    if not clean_h:
+        return JSONResponse(status_code=400, content={"error": "Handle cannot be empty"})
+    ok = update_monitored_channel(req.id, clean_h, req.category, req.notes)
+    if ok:
+        log_event(f"✏️ Updated monitored channel #{req.id} to @{clean_h} ({req.category})")
+        return {"success": True, "message": f"Channel #{req.id} updated"}
+    return JSONResponse(status_code=400, content={"error": "Could not update channel"})
+
+@app.post("/api/channels/delete/{identifier}")
+def delete_channel_endpoint(identifier: str, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    ok = delete_monitored_channel(identifier)
+    if ok:
+        log_event(f"🗑️ Removed monitored channel '{identifier}'")
+        return {"success": True, "message": f"Channel '{identifier}' removed successfully"}
+    return JSONResponse(status_code=404, content={"error": f"Channel '{identifier}' not found"})
 
 # =========================================================================
 # Single Daily 7:00 PM News Carousel API Endpoint

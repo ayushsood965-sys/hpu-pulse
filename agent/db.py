@@ -100,7 +100,34 @@ def init_db():
         )
     """)
 
+    # 6. Monitored Instagram Channels Table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS monitored_channels (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            handle TEXT UNIQUE NOT NULL,
+            category TEXT DEFAULT 'Target HPU Channel',
+            notes TEXT DEFAULT '',
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     conn.commit()
+
+    # Seed default handles if table is empty
+    cursor.execute("SELECT count(*) FROM monitored_channels")
+    if cursor.fetchone()[0] == 0:
+        try:
+            from .config import TARGET_REEL_HANDLES
+            for h in TARGET_REEL_HANDLES:
+                clean_h = h.strip().lstrip("@")
+                if clean_h:
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO monitored_channels (handle, category, notes) VALUES (?, ?, ?)",
+                        (clean_h, "Campus News & Alerts", "Default target channel")
+                    )
+            conn.commit()
+        except Exception as e:
+            print(f"Warning seeding default monitored channels: {e}")
+
     conn.close()
 
 def compute_hash(content_string: str) -> str:
@@ -574,6 +601,77 @@ def get_daily_news_carousel_published_today() -> bool:
     row = cursor.fetchone()
     conn.close()
     return row is not None
+
+# =========================================================================
+# Monitored Channels CRUD Helper Functions
+# =========================================================================
+
+def get_monitored_channels() -> List[Dict[str, Any]]:
+    """Returns list of all monitored Instagram channels."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, handle, category, notes, added_at FROM monitored_channels ORDER BY id ASC")
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+def add_monitored_channel(handle: str, category: str = "Target HPU Channel", notes: str = "") -> bool:
+    """Adds a new channel to the monitored channels table."""
+    clean_h = handle.strip().lstrip("@")
+    if not clean_h:
+        return False
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO monitored_channels (handle, category, notes) VALUES (?, ?, ?)",
+            (clean_h, category or "Target HPU Channel", notes or "")
+        )
+        conn.commit()
+        success = True
+    except sqlite3.IntegrityError:
+        success = False
+    finally:
+        conn.close()
+    return success
+
+def update_monitored_channel(channel_id: int, handle: str, category: str = "", notes: str = "") -> bool:
+    """Updates an existing monitored channel."""
+    clean_h = handle.strip().lstrip("@")
+    if not clean_h:
+        return False
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE monitored_channels SET handle = ?, category = ?, notes = ? WHERE id = ?",
+            (clean_h, category or "Target HPU Channel", notes or "", channel_id)
+        )
+        conn.commit()
+        success = cursor.rowcount > 0
+    except Exception:
+        success = False
+    finally:
+        conn.close()
+    return success
+
+def delete_monitored_channel(channel_id_or_handle: Any) -> bool:
+    """Deletes a channel from the monitored channels table by ID or handle."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    clean_val = str(channel_id_or_handle).strip().lstrip("@")
+    try:
+        if str(channel_id_or_handle).isdigit():
+            cursor.execute("DELETE FROM monitored_channels WHERE id = ? OR handle = ?", (int(channel_id_or_handle), clean_val))
+        else:
+            cursor.execute("DELETE FROM monitored_channels WHERE handle = ?", (clean_val,))
+        conn.commit()
+        success = cursor.rowcount > 0
+    except Exception:
+        success = False
+    finally:
+        conn.close()
+    return success
 
 # Auto-initialize tables
 init_db()

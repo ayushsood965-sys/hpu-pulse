@@ -28,7 +28,9 @@ from .db import (
     get_pending_curated_reels,
     mark_curated_reel_published,
     update_curated_reel_status,
-    record_published_post
+    record_published_post,
+    get_monitored_channels,
+    get_connection
 )
 from .poster import publish_reel_to_instagram
 from .uploader import upload_video
@@ -45,6 +47,16 @@ def extract_reel_shortcode(url: str) -> Optional[str]:
 def clean_handle(handle: str) -> str:
     """Removes leading @ and trims handle."""
     return (handle or "").strip().lstrip("@")
+
+def get_active_target_handles() -> List[str]:
+    """Retrieves dynamic monitored channels from the database, falling back to config defaults."""
+    try:
+        channels = get_monitored_channels()
+        if channels:
+            return [c["handle"].strip().lstrip("@") for c in channels if c.get("handle")]
+    except Exception as e:
+        print(f"[ReelsCurator] Warning reading target handles from DB: {e}")
+    return TARGET_REEL_HANDLES
 
 def get_rolling_date_cutoff(days: int = REELS_LOOKBACK_DAYS) -> Tuple[date, str]:
     """
@@ -205,7 +217,8 @@ def scan_target_handles_for_reels(force_for_test: bool = False, lookback_days: i
     Monitors all Category 1 to 4 target handles and general HPU keywords for newly published reels.
     Identifies eligible reels within the past `lookback_days` days, applies cutoff & thresholds, and enqueues them.
     """
-    targets = [(h, f'site:instagram.com/reel "{h}"') for h in TARGET_REEL_HANDLES]
+    active_handles = get_active_target_handles()
+    targets = [(h, f'site:instagram.com/reel "{h}"') for h in active_handles]
     targets += [
         ("hpu", 'site:instagram.com/reel "hpu"'),
         ("himachal_pradesh_university", 'site:instagram.com/reel "himachal pradesh university"'),
@@ -475,3 +488,35 @@ def manually_enqueue_reel(url: str, force: bool = False) -> Dict[str, Any]:
 
     meta["id"] = reel_id
     return {"success": True, "reel": meta}
+
+def crawl_and_publish_single_reel_now(url: str, force: bool = True) -> Dict[str, Any]:
+    """Crawls/downloads a specific reel URL and immediately publishes it to Instagram."""
+    shortcode = extract_reel_shortcode(url)
+    if not shortcode:
+        return {"success": False, "error": "Invalid Instagram Reel URL"}
+
+    print(f"\n[ReelsCurator] 🚀 Direct Crawl & Publish Triggered for: {url}")
+    meta = fetch_reel_metadata_and_download(url, download=False)
+    if not meta:
+        return {"success": False, "error": "Could not extract metadata from Instagram"}
+
+    # Save reel record to DB
+    reel_id = save_curated_reel(meta)
+    if not reel_id:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM curated_reels WHERE shortcode = ?", (shortcode,))
+        row = cursor.fetchone()
+        conn.close()
+        reel_id = row["id"] if row else None
+
+    if not reel_id:
+        return {"success": False, "error": "Database error registering reel"}
+
+    meta["id"] = reel_id
+    success = publish_curated_reel_record(meta, dry_run=False)
+    if success:
+        return {"success": True, "message": f"Successfully published reel {shortcode} to Instagram!", "reel": meta}
+    else:
+        return {"success": False, "error": "Meta Graph API publishing failed", "reel": meta}
+

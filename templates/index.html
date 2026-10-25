@@ -539,10 +539,37 @@
     .log-level-ERROR { color: var(--danger); font-weight: 600; }
     .log-msg { color: var(--text); word-break: break-all; }
 
-    /* Channels Grid */
+    /* Channels Grid & Management */
+    .channel-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 20px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .channel-search-box {
+      background: rgba(8, 16, 20, 0.85);
+      border: 1px solid rgba(56, 223, 123, 0.25);
+      border-radius: 12px;
+      padding: 11px 18px;
+      color: #fff;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      min-width: 280px;
+      transition: all 0.2s ease;
+    }
+
+    .channel-search-box:focus {
+      border-color: var(--mint);
+      box-shadow: 0 0 14px var(--mint-glow);
+    }
+
     .handles-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
       gap: 14px;
     }
 
@@ -550,23 +577,32 @@
       background: var(--surface-card);
       border: 1px solid rgba(56, 223, 123, 0.18);
       border-radius: 14px;
-      padding: 14px 16px;
+      padding: 16px 18px;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
+      flex-direction: column;
+      gap: 10px;
       transition: all 0.2s ease;
+      position: relative;
     }
 
     .handle-card:hover {
       border-color: var(--mint);
       background: rgba(56, 223, 123, 0.08);
-      transform: translateY(-1px);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .handle-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
     }
 
     .handle-link {
       color: #fff;
       text-decoration: none;
-      font-weight: 600;
+      font-weight: 700;
       font-size: 14px;
       display: flex;
       align-items: center;
@@ -575,6 +611,82 @@
 
     .handle-link:hover {
       color: var(--mint);
+    }
+
+    .handle-card-notes {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.4;
+      min-height: 18px;
+    }
+
+    .handle-card-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding-top: 10px;
+      margin-top: 4px;
+    }
+
+    .btn-action-icon {
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      transition: all 0.15s ease;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-family: inherit;
+    }
+
+    .btn-action-icon:hover {
+      background: rgba(56, 223, 123, 0.15);
+      border-color: var(--mint);
+      color: var(--mint);
+    }
+
+    .btn-action-delete:hover {
+      background: rgba(255, 77, 77, 0.18);
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    /* Modal Dialog */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(5, 10, 13, 0.88);
+      backdrop-filter: blur(10px);
+      z-index: 9998;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.25s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal-box {
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 30px;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px var(--mint-glow);
+      animation: modalSlide 0.25s ease-out;
     }
 
     /* Modal / Alert Notification Toast */
@@ -650,7 +762,7 @@
       <button class="tab-btn active" data-tab="tab-overview">⚡ Command Overview</button>
       <button class="tab-btn" data-tab="tab-reels">🎬 Curated Reels <span class="tab-badge" id="badge-reels-today">0/15</span></button>
       <button class="tab-btn" data-tab="tab-news">📰 7:00 PM News Carousel <span class="tab-badge" id="badge-news-count">0</span></button>
-      <button class="tab-btn" data-tab="tab-channels">🎯 40 Target Channels</button>
+      <button class="tab-btn" data-tab="tab-channels">🎯 Target Channels <span class="tab-badge" id="badge-channels-count">40</span></button>
       <button class="tab-btn" data-tab="tab-logs">💻 Live Logs</button>
       <button class="tab-btn" data-tab="tab-settings">⚙️ Settings & Credentials</button>
     </div>
@@ -706,6 +818,24 @@
       <div class="command-hub">
         <div class="command-hub-title">⚡ Instant Automation Command Center</div>
         <div class="actions-grid">
+          <button class="action-card-btn" id="btn-crawl-and-publish-now" style="border-color: rgba(56, 223, 123, 0.5); background: rgba(56, 223, 123, 0.1);">
+            <span class="action-icon">🚀</span>
+            <span class="action-name" style="color: var(--mint);">Crawl & Publish Next Reel</span>
+            <span class="action-desc">Autonomous scan of target channels & immediate publish of top 3-day viral reel</span>
+          </button>
+
+          <button class="action-card-btn" id="btn-scan-reels-now">
+            <span class="action-icon">🔍</span>
+            <span class="action-name">Scan Target Reels</span>
+            <span class="action-desc">Check monitored HPU channels for qualifying viral reels</span>
+          </button>
+
+          <button class="action-card-btn" id="btn-post-reel-now">
+            <span class="action-icon">🎬</span>
+            <span class="action-name">Post Next Queued Reel</span>
+            <span class="action-desc">Publish next eligible queued reel with creator credits</span>
+          </button>
+
           <button class="action-card-btn" id="btn-crawl-now">
             <span class="action-icon">🕷️</span>
             <span class="action-name">Crawl Portals & News</span>
@@ -718,24 +848,35 @@
             <span class="action-desc">Generate & post today's multi-story news roundup instantly</span>
           </button>
 
-          <button class="action-card-btn" id="btn-scan-reels-now">
-            <span class="action-icon">🔍</span>
-            <span class="action-name">Scan Target Reels</span>
-            <span class="action-desc">Check 40 monitored HPU channels for qualifying reels</span>
-          </button>
-
-          <button class="action-card-btn" id="btn-post-reel-now">
-            <span class="action-icon">🎬</span>
-            <span class="action-name">Post Next Reel</span>
-            <span class="action-desc">Publish next eligible queued reel with creator credits</span>
-          </button>
-
           <button class="action-card-btn" id="btn-toggle-agent">
             <span class="action-icon">⏯️</span>
             <span class="action-name" id="agent-toggle-text">Pause Scheduler</span>
             <span class="action-desc">Start or stop autonomous background task workers</span>
           </button>
         </div>
+      </div>
+
+      <!-- Direct Video Crawl & Instant Manual Post Hub -->
+      <div class="card" style="margin-bottom: 26px; border: 1px solid rgba(56, 223, 123, 0.35); background: linear-gradient(135deg, rgba(18, 32, 40, 0.95) 0%, rgba(12, 22, 27, 0.95) 100%);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 26px;">🎬</span>
+            <div>
+              <h3 style="font-size: 16px; font-weight: 700; color: #fff;">Direct Instagram Video Crawl & Instant Manual Post</h3>
+              <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Paste any Instagram Reel or Post link to crawl, download video, generate creator credit captions, and publish live to @hpu.pulse immediately.</p>
+            </div>
+          </div>
+          <span class="tag tag-general">Direct Publisher</span>
+        </div>
+        <form id="direct-crawl-publish-form" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 10px;">
+          <input type="url" id="direct-crawl-url" class="password-input" style="margin-bottom: 0; flex: 1; min-width: 300px;" placeholder="https://www.instagram.com/reel/XXXXX/ or /p/XXXXX/" required>
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-muted); cursor: pointer; user-select: none;">
+            <input type="checkbox" id="direct-crawl-force" checked> Bypass engagement threshold
+          </label>
+          <button type="submit" class="btn btn-mint" id="btn-direct-submit" style="white-space: nowrap;">
+            <span>⚡ Crawl & Publish Immediately</span>
+          </button>
+        </form>
       </div>
 
       <!-- Next Scheduled Jobs -->
@@ -882,11 +1023,61 @@
 
     <!-- TAB 4: TARGET CHANNELS -->
     <div class="tab-pane" id="tab-channels">
-      <div class="card" style="margin-bottom: 20px;">
-        <h3 style="font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 6px;">🎯 Monitored Target Instagram Handles (Categories 1 to 4)</h3>
-        <p style="font-size: 13px; color: var(--text-muted);">The autonomous crawler scans these 40 high-authority channels for breaking notices, student circulars, and qualifying viral reels.</p>
+      <!-- Target Channels Overview Banner -->
+      <div class="card" style="margin-bottom: 24px; border-left: 4px solid var(--mint);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div>
+            <h3 style="font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 4px;">🎯 Monitored Target Instagram Channels & Sources</h3>
+            <p style="font-size: 13px; color: var(--text-muted);">
+              Manage high-authority HPU channels monitored for student updates, circulars, and qualifying viral reels.<br>
+              You can add new handles, edit their category/notes, or remove channels anytime. Updates apply in real-time.
+            </p>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:24px; font-weight:800; color:var(--mint);" id="channels-count-display">40</div>
+            <div style="font-size:12px; color:var(--text-muted);">Active Monitored Channels</div>
+          </div>
+        </div>
       </div>
 
+      <!-- Add New Channel Form Card -->
+      <div class="card" style="margin-bottom: 24px;">
+        <div class="card-label">➕ Add New Instagram Target Channel</div>
+        <form id="add-channel-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) auto; gap: 12px; align-items: end; margin-top: 10px;">
+          <div>
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">INSTAGRAM HANDLE</label>
+            <input type="text" id="add-channel-handle" class="password-input" style="margin-bottom: 0;" placeholder="@username or username" required>
+          </div>
+          <div>
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">CATEGORY</label>
+            <select id="add-channel-category" class="password-input" style="margin-bottom: 0; background: rgba(8, 16, 20, 0.95); cursor: pointer;">
+              <option value="HPU Official / Admin">HPU Official / Admin</option>
+              <option value="Student Media / News" selected>Student Media / News</option>
+              <option value="Department / Club / Fest">Department / Club / Fest</option>
+              <option value="Himachal News / General">Himachal News / General</option>
+              <option value="Influencer / Campus Life">Influencer / Campus Life</option>
+              <option value="Other / Uncategorized">Other / Uncategorized</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">NOTES / DESCRIPTION (OPTIONAL)</label>
+            <input type="text" id="add-channel-notes" class="password-input" style="margin-bottom: 0;" placeholder="e.g. Student union announcements">
+          </div>
+          <button type="submit" class="btn btn-mint" style="height: 48px; justify-content: center;">
+            <span>➕ Add Channel</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- Toolbar: Search & Filters -->
+      <div class="channel-toolbar">
+        <input type="text" id="channel-search-input" class="channel-search-box" placeholder="🔍 Search channels by handle, category or notes...">
+        <div style="font-size: 13px; color: var(--text-muted);">
+          Showing <span id="channels-filtered-count" style="color: var(--mint); font-weight: 700;">40</span> channels
+        </div>
+      </div>
+
+      <!-- Channels Grid -->
       <div class="handles-grid" id="handles-grid-container">
         <!-- Dynamically rendered -->
       </div>
@@ -930,9 +1121,47 @@
 
   </div>
 
+  <!-- Edit Channel Modal -->
+  <div id="edit-channel-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+        <h3 style="font-size: 18px; font-weight: 700; color: #fff;">✏️ Edit Monitored Channel</h3>
+        <button type="button" id="btn-close-edit-modal" style="background:none; border:none; color:var(--text-muted); font-size:22px; cursor:pointer; padding: 4px;">&times;</button>
+      </div>
+      <form id="edit-channel-form">
+        <input type="hidden" id="edit-channel-id">
+        <div style="margin-bottom: 14px;">
+          <label style="font-size: 11px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">INSTAGRAM HANDLE</label>
+          <input type="text" id="edit-channel-handle" class="password-input" required>
+        </div>
+        <div style="margin-bottom: 14px;">
+          <label style="font-size: 11px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">CATEGORY</label>
+          <select id="edit-channel-category" class="password-input" style="background: rgba(8, 16, 20, 0.95); cursor: pointer;">
+            <option value="HPU Official / Admin">HPU Official / Admin</option>
+            <option value="Student Media / News">Student Media / News</option>
+            <option value="Department / Club / Fest">Department / Club / Fest</option>
+            <option value="Himachal News / General">Himachal News / General</option>
+            <option value="Influencer / Campus Life">Influencer / Campus Life</option>
+            <option value="Other / Uncategorized">Other / Uncategorized</option>
+          </select>
+        </div>
+        <div style="margin-bottom: 22px;">
+          <label style="font-size: 11px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px;">NOTES / DESCRIPTION</label>
+          <input type="text" id="edit-channel-notes" class="password-input" placeholder="e.g. Official campus club">
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button type="button" class="btn btn-surface" id="btn-cancel-edit-modal">Cancel</button>
+          <button type="submit" class="btn btn-mint">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
     // State
     let authToken = localStorage.getItem('hpu_auth_token') || '';
+    let allMonitoredChannels = [];
+    let channelSearchQuery = '';
 
     function showToast(msg) {
       const toast = document.getElementById('toast');
@@ -1192,18 +1421,18 @@
         newsGrid.innerHTML = '<div style="color:var(--text-muted); font-size:14px;">No circulars or news waiting in queue. Crawlers run every 60 minutes.</div>';
       }
 
-      // Monitored Handles Grid
-      const handlesContainer = document.getElementById('handles-grid-container');
-      const handles = data.monitored_handles || [];
-      if (handles.length && handlesContainer.children.length === 0) {
-        handlesContainer.innerHTML = handles.map(h => `
-          <div class="handle-card">
-            <a href="https://www.instagram.com/${h}/" target="_blank" class="handle-link">
-              <span>📸</span> @${h}
-            </a>
-            <span class="tag tag-general" style="font-size:10px;">Monitoring</span>
-          </div>
-        `).join('');
+      // Monitored Channels Grid & Badges
+      if (data.monitored_channels_list && Array.isArray(data.monitored_channels_list)) {
+        allMonitoredChannels = data.monitored_channels_list;
+        renderChannelsList();
+      } else if (data.monitored_handles && Array.isArray(data.monitored_handles)) {
+        allMonitoredChannels = data.monitored_handles.map((h, idx) => ({
+          id: idx + 1,
+          handle: h,
+          category: 'Target HPU Channel',
+          notes: ''
+        }));
+        renderChannelsList();
       }
 
       // Terminal Logs
@@ -1225,6 +1454,170 @@
       return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    function escapeJsString(str) {
+      if (!str) return '';
+      return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    }
+
+    function getCategoryTagClass(cat) {
+      if (!cat) return 'general';
+      const c = cat.toLowerCase();
+      if (c.includes('official') || c.includes('admin')) return 'breaking';
+      if (c.includes('student') || c.includes('media')) return 'admission';
+      if (c.includes('club') || c.includes('fest') || c.includes('dept')) return 'exam';
+      if (c.includes('himachal') || c.includes('news')) return 'result';
+      return 'general';
+    }
+
+    function renderChannelsList() {
+      const handlesContainer = document.getElementById('handles-grid-container');
+      if (!handlesContainer) return;
+      const filteredCountEl = document.getElementById('channels-filtered-count');
+      const totalCountEl = document.getElementById('channels-count-display');
+      const tabBadgeEl = document.getElementById('badge-channels-count');
+
+      if (totalCountEl) totalCountEl.innerText = allMonitoredChannels.length;
+      if (tabBadgeEl) tabBadgeEl.innerText = allMonitoredChannels.length;
+
+      const q = (channelSearchQuery || '').toLowerCase().trim();
+      const filtered = allMonitoredChannels.filter(c => {
+        if (!q) return true;
+        const handleMatch = (c.handle || '').toLowerCase().includes(q);
+        const catMatch = (c.category || '').toLowerCase().includes(q);
+        const notesMatch = (c.notes || '').toLowerCase().includes(q);
+        return handleMatch || catMatch || notesMatch;
+      });
+
+      if (filteredCountEl) filteredCountEl.innerText = filtered.length;
+
+      if (!filtered.length) {
+        handlesContainer.innerHTML = `
+          <div style="grid-column: 1 / -1; text-align:center; padding: 36px 20px; color: var(--text-muted); background: var(--surface-card); border-radius: 14px; border: 1px dashed var(--border);">
+            <div style="font-size:28px; margin-bottom:8px;">🔍</div>
+            <div style="font-weight:600; color:#fff; margin-bottom:4px;">No matching channels found</div>
+            <div style="font-size:12px;">Try adjusting your search query or add this channel using the form above.</div>
+          </div>
+        `;
+        return;
+      }
+
+      handlesContainer.innerHTML = filtered.map(c => `
+        <div class="handle-card">
+          <div class="handle-card-top">
+            <a href="https://www.instagram.com/${escapeHtml(c.handle)}/" target="_blank" class="handle-link">
+              <span>📸</span> @${escapeHtml(c.handle)}
+            </a>
+            <span class="tag tag-${getCategoryTagClass(c.category)}" style="font-size:10px;">
+              ${escapeHtml(c.category || 'General')}
+            </span>
+          </div>
+          <div class="handle-card-notes">
+            ${c.notes ? escapeHtml(c.notes) : '<span style="color:var(--text-dim); font-style:italic;">No notes provided</span>'}
+          </div>
+          <div class="handle-card-actions">
+            <button type="button" class="btn-action-icon" onclick="openEditChannelModal(${c.id})">
+              <span>✏️</span> Edit
+            </button>
+            <button type="button" class="btn-action-icon btn-action-delete" onclick="deleteChannel(${c.id}, '${escapeJsString(c.handle)}')">
+              <span>🗑️</span> Delete
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Modal Helpers
+    window.openEditChannelModal = function(id) {
+      const ch = allMonitoredChannels.find(c => c.id === id);
+      if (!ch) return;
+      document.getElementById('edit-channel-id').value = ch.id;
+      document.getElementById('edit-channel-handle').value = ch.handle;
+      document.getElementById('edit-channel-category').value = ch.category || 'Student Media / News';
+      document.getElementById('edit-channel-notes').value = ch.notes || '';
+      document.getElementById('edit-channel-modal').classList.add('active');
+    };
+
+    function closeEditChannelModal() {
+      document.getElementById('edit-channel-modal').classList.remove('active');
+    }
+
+    document.getElementById('btn-close-edit-modal').addEventListener('click', closeEditChannelModal);
+    document.getElementById('btn-cancel-edit-modal').addEventListener('click', closeEditChannelModal);
+
+    // Edit Channel Form
+    document.getElementById('edit-channel-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = parseInt(document.getElementById('edit-channel-id').value, 10);
+      const handle = document.getElementById('edit-channel-handle').value.trim();
+      const category = document.getElementById('edit-channel-category').value;
+      const notes = document.getElementById('edit-channel-notes').value.trim();
+
+      fetch('/api/channels/edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, handle, category, notes })
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          showToast(d.message);
+          closeEditChannelModal();
+          fetchStatus();
+        } else {
+          alert('Error updating channel: ' + (d.error || 'Failed'));
+        }
+      })
+      .catch(err => alert('Request failed: ' + err));
+    });
+
+    // Delete Channel
+    window.deleteChannel = function(id, handle) {
+      if (!confirm(`Are you sure you want to remove @${handle} from target monitored channels?`)) return;
+      fetch(`/api/channels/delete/${id}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+          if (d.success) {
+            showToast(d.message);
+            fetchStatus();
+          } else {
+            alert('Error deleting channel: ' + (d.error || 'Failed'));
+          }
+        })
+        .catch(err => alert('Delete request failed: ' + err));
+    };
+
+    // Add Channel Form
+    document.getElementById('add-channel-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const handle = document.getElementById('add-channel-handle').value.trim();
+      const category = document.getElementById('add-channel-category').value;
+      const notes = document.getElementById('add-channel-notes').value.trim();
+
+      fetch('/api/channels/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handle, category, notes })
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          showToast(d.message);
+          document.getElementById('add-channel-handle').value = '';
+          document.getElementById('add-channel-notes').value = '';
+          fetchStatus();
+        } else {
+          alert('Error adding channel: ' + (d.error || 'Failed'));
+        }
+      })
+      .catch(err => alert('Add request failed: ' + err));
+    });
+
+    // Channel Search Input Filter
+    document.getElementById('channel-search-input').addEventListener('input', (e) => {
+      channelSearchQuery = e.target.value;
+      renderChannelsList();
+    });
+
     // Skip Reel Action
     window.skipReel = function(reelId) {
       if (!confirm(`Skip and remove reel #${reelId} from queue?`)) return;
@@ -1237,6 +1630,40 @@
     };
 
     // Action Triggers
+    const btnCrawlPub = document.getElementById('btn-crawl-and-publish-now');
+    if (btnCrawlPub) {
+      btnCrawlPub.addEventListener('click', () => {
+        showToast('🚀 Crawl & Publish cycle dispatched! Scanning viral reels...');
+        fetch('/api/reels/crawl-and-publish', { method: 'POST' })
+          .then(r => r.json())
+          .then(d => { showToast(d.message); fetchStatus(); });
+      });
+    }
+
+    const directForm = document.getElementById('direct-crawl-publish-form');
+    if (directForm) {
+      directForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const url = document.getElementById('direct-crawl-url').value.trim();
+        const force = document.getElementById('direct-crawl-force').checked;
+        showToast('⚡ Crawling video & generating Instagram post...');
+        fetch('/api/reels/direct-publish', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, force })
+        })
+        .then(r => r.json())
+        .then(d => {
+          showToast(d.message || 'Direct publish dispatched in background!');
+          document.getElementById('direct-crawl-url').value = '';
+          fetchStatus();
+        })
+        .catch(err => {
+          alert('Error dispatching direct publish: ' + err);
+        });
+      });
+    }
+
     document.getElementById('btn-crawl-now').addEventListener('click', () => {
       fetch('/api/crawl-now', { method: 'POST' })
         .then(r => r.json())
