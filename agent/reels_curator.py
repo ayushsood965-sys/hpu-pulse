@@ -14,6 +14,7 @@ from googlenewsdecoder import gnewsdecoder
 from .config import (
     CURATED_REELS_DIR,
     MAX_DAILY_REEL_UPLOADS,
+    REELS_LOOKBACK_DAYS,
     REELS_DATE_CUTOFF,
     TARGET_REEL_HANDLES,
     SERVER_URL,
@@ -45,9 +46,18 @@ def clean_handle(handle: str) -> str:
     """Removes leading @ and trims handle."""
     return (handle or "").strip().lstrip("@")
 
+def get_rolling_date_cutoff(days: int = REELS_LOOKBACK_DAYS) -> Tuple[date, str]:
+    """
+    Returns (cutoff_date_obj, 'YYYYMMDD') representing the lookback threshold.
+    Reels uploaded on or after this date qualify for engagement evaluation.
+    """
+    cutoff_date = date.today() - timedelta(days=days)
+    return cutoff_date, cutoff_date.strftime("%Y%m%d")
+
 def parse_date_cutoff() -> str:
-    """Returns YYYYMMDD string for date cutoff."""
-    return REELS_DATE_CUTOFF.replace("-", "")
+    """Returns YYYYMMDD string for date cutoff based on rolling lookback window."""
+    _, cutoff_str = get_rolling_date_cutoff()
+    return cutoff_str
 
 def fetch_reel_metadata_and_download(
     url: str,
@@ -165,35 +175,35 @@ def fetch_reel_metadata_and_download(
                 print(f"[ReelsCurator] Recovery download failed: {e2}")
         return None
 
-def is_reel_qualified(meta: Dict[str, Any]) -> Tuple[bool, str]:
+def is_reel_qualified(meta: Dict[str, Any], lookback_days: int = REELS_LOOKBACK_DAYS) -> Tuple[bool, str]:
     """
     Enforces filtering rules:
-    1. Uploaded ON or AFTER 25th October 2026.
-    2. Engagement: Views > 1000 OR Likes > 200 OR Comments > 100.
+    1. Uploaded within the past `lookback_days` days (default 3-day rolling window).
+    2. Engagement: Views >= 1000 OR Likes >= 200 OR Comments >= 100.
     """
-    cutoff_str = parse_date_cutoff()  # "20261025"
+    _, cutoff_str = get_rolling_date_cutoff(lookback_days)
     upload_date = meta.get("upload_date") or ""
 
     if upload_date and upload_date < cutoff_str:
-        return False, f"Uploaded on {upload_date}, which is before cutoff {cutoff_str} (25 Oct 2026)"
+        return False, f"Uploaded on {upload_date}, older than rolling {lookback_days}-day window (cutoff: {cutoff_str})"
 
-    views = meta.get("view_count") or 0
-    likes = meta.get("like_count") or 0
-    comments = meta.get("comment_count") or 0
+    views = int(meta.get("view_count") or 0)
+    likes = int(meta.get("like_count") or 0)
+    comments = int(meta.get("comment_count") or 0)
 
-    has_views = views > 1000
-    has_likes = likes > 200
-    has_comments = comments > 100
+    has_views = views >= 1000
+    has_likes = likes >= 200
+    has_comments = comments >= 100
 
     if has_views or has_likes or has_comments:
         return True, f"Qualified (Views: {views}, Likes: {likes}, Comments: {comments})"
 
-    return False, f"Below thresholds (Views: {views}<=1000, Likes: {likes}<=200, Comments: {comments}<=100)"
+    return False, f"Below thresholds (Views: {views}<1000, Likes: {likes}<200, Comments: {comments}<100)"
 
-def scan_target_handles_for_reels(force_for_test: bool = False) -> List[Dict[str, Any]]:
+def scan_target_handles_for_reels(force_for_test: bool = False, lookback_days: int = REELS_LOOKBACK_DAYS) -> List[Dict[str, Any]]:
     """
     Monitors all Category 1 to 4 target handles and general HPU keywords for newly published reels.
-    Identifies eligible reels, applies cutoff & thresholds, and enqueues them.
+    Identifies eligible reels within the past `lookback_days` days, applies cutoff & thresholds, and enqueues them.
     """
     targets = [(h, f'site:instagram.com/reel "{h}"') for h in TARGET_REEL_HANDLES]
     targets += [
@@ -201,7 +211,8 @@ def scan_target_handles_for_reels(force_for_test: bool = False) -> List[Dict[str
         ("himachal_pradesh_university", 'site:instagram.com/reel "himachal pradesh university"'),
         ("hpushimla", 'site:instagram.com/reel "hpushimla"')
     ]
-    print(f"\n[ReelsCurator] 🔍 Starting scan across {len(targets)} HPU search targets (40 accounts + campus keywords)...")
+    cutoff_date, cutoff_str = get_rolling_date_cutoff(lookback_days)
+    print(f"\n[ReelsCurator] 🔍 Starting scan across {len(targets)} HPU search targets (rolling {lookback_days}-day window from {cutoff_str})...")
     discovered = []
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
@@ -226,11 +237,11 @@ def scan_target_handles_for_reels(force_for_test: bool = False) -> List[Dict[str
                 if not article_url:
                     continue
 
-                # Quick date check: if item pubDate says older year or month, skip
+                # Quick date check: if item pubDate is older than rolling cutoff date, skip
                 if pub_date_str:
                     try:
                         parsed_dt = datetime.strptime(pub_date_str[:16], "%a, %d %b %Y")
-                        if parsed_dt.date() < date(2026, 10, 25):
+                        if parsed_dt.date() < cutoff_date:
                             continue
                     except Exception:
                         pass
@@ -254,7 +265,7 @@ def scan_target_handles_for_reels(force_for_test: bool = False) -> List[Dict[str
                 if not meta.get("uploader_handle"):
                     meta["uploader_handle"] = handle
 
-                qualified, reason = is_reel_qualified(meta)
+                qualified, reason = is_reel_qualified(meta, lookback_days=lookback_days)
                 print(f"  [ReelsCurator] Reel {shortcode} (@{meta['uploader_handle']}): {reason}")
                 if not qualified and not force_for_test:
                     continue

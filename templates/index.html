@@ -776,9 +776,10 @@
           <div>
             <h3 style="font-size:16px; font-weight:700; color:#fff; margin-bottom:4px;">🎯 Autonomous Reels Curation Pipeline Rules</h3>
             <p style="font-size:13px; color:var(--text-muted);">
-              • Date Cutoff: Uploaded on or after <strong>25 October 2026</strong> only.<br>
-              • Engagement Threshold: <strong>Views > 1000</strong> OR <strong>Likes > 200</strong> OR <strong>Comments > 100</strong>.<br>
-              • Daily Limit: Strict maximum of <strong>15 reels per day</strong>. Overflows automatically rollover to the next day's quota.
+              • <strong>Rolling 3-Day Sliding Window:</strong> Scans reels uploaded over the last 3 days to accommodate viral engagement ramp-up.<br>
+              • <strong>Engagement Threshold:</strong> Views &ge; <strong>1,000</strong> OR Likes &ge; <strong>200</strong> OR Comments &ge; <strong>100</strong>.<br>
+              • <strong>Deduplication:</strong> Every reel is tracked by unique Instagram shortcode; no reel is ever uploaded twice.<br>
+              • <strong>Daily Limit:</strong> Maximum of <strong>15 reels per day</strong>. Overflow reels automatically rollover to the next day's quota.
             </p>
           </div>
           <div style="text-align:right;">

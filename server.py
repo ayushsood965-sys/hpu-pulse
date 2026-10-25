@@ -460,7 +460,8 @@ def get_status(request: Request, authorization: Optional[str] = Header(None), hp
         "published_curated_reels": published_curated,
         "pending_curated_reels": pending_curated,
         "pending_curated_count": len(pending_curated),
-        "reels_date_cutoff": REELS_DATE_CUTOFF,
+        "reels_date_cutoff": (date.today() - timedelta(days=3)).strftime("%Y-%m-%d"),
+        "reels_lookback_days": 3,
         "monitored_handles_count": len(TARGET_REEL_HANDLES),
         "monitored_handles": TARGET_REEL_HANDLES,
 
