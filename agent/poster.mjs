@@ -107,7 +107,7 @@ async function publishCarousel(imageUrls, caption) {
 }
 
 async function publishReel(videoUrl, caption, audioName = "") {
-  let createUrl = `${baseUrl}/${accountId}/media?media_type=REELS&video_url=${encodeURIComponent(videoUrl)}&caption=${encodeURIComponent(caption)}&access_token=${accessToken}`;
+  let createUrl = `${baseUrl}/${accountId}/media?media_type=REELS&video_url=${encodeURIComponent(videoUrl)}&caption=${encodeURIComponent(caption)}&share_to_feed=true&access_token=${accessToken}`;
   if (audioName && audioName.trim()) {
     createUrl += `&audio_name=${encodeURIComponent(audioName.trim())}`;
   }

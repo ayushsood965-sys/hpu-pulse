@@ -78,7 +78,7 @@ def fetch_reel_metadata_and_download(
             if not upload_date and timestamp:
                 upload_date = datetime.fromtimestamp(timestamp).strftime("%Y%m%d")
 
-            uploader = info.get("uploader_id") or info.get("uploader") or info.get("channel") or ""
+            uploader = info.get("channel") or info.get("uploader") or info.get("uploader_id") or ""
             uploader = clean_handle(uploader)
 
             view_count = info.get("view_count") or 0
@@ -87,13 +87,32 @@ def fetch_reel_metadata_and_download(
 
             local_path = None
             if download:
+                CURATED_REELS_DIR.mkdir(parents=True, exist_ok=True)
                 expected_path = CURATED_REELS_DIR / f"{shortcode}.mp4"
-                if expected_path.exists():
+                if expected_path.exists() and expected_path.stat().st_size > 10000:
                     local_path = str(expected_path)
                 else:
                     for f in CURATED_REELS_DIR.glob(f"{shortcode}.*"):
-                        local_path = str(f)
-                        break
+                        if f.is_file() and f.stat().st_size > 10000:
+                            local_path = str(f)
+                            break
+
+                # Fallback: direct CDN stream download if yt-dlp file is missing
+                if not local_path or not Path(local_path).exists() or Path(local_path).stat().st_size == 0:
+                    cdn_url = info.get("url")
+                    if cdn_url:
+                        print(f"  [ReelsCurator] Downloading direct CDN video stream to {expected_path.name}...")
+                        try:
+                            r = requests.get(cdn_url, stream=True, timeout=30)
+                            if r.status_code == 200:
+                                with open(expected_path, "wb") as f_out:
+                                    for chunk in r.iter_content(chunk_size=1024*1024):
+                                        if chunk:
+                                            f_out.write(chunk)
+                                local_path = str(expected_path)
+                                print(f"  [ReelsCurator] Direct download complete ({Path(local_path).stat().st_size} bytes).")
+                        except Exception as e_cdn:
+                            print(f"  [ReelsCurator] Direct CDN download failed: {e_cdn}")
 
             return {
                 "instagram_url": f"https://www.instagram.com/reel/{shortcode}/",
@@ -111,6 +130,39 @@ def fetch_reel_metadata_and_download(
             }
     except Exception as e:
         print(f"[ReelsCurator] yt-dlp error for {url}: {e}")
+        # In case yt-dlp download failed, attempt flat extraction + direct stream download
+        if download:
+            try:
+                CURATED_REELS_DIR.mkdir(parents=True, exist_ok=True)
+                expected_path = CURATED_REELS_DIR / f"{shortcode}.mp4"
+                with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl2:
+                    info2 = ydl2.extract_info(url, download=False)
+                    cdn_url = info2.get("url") if info2 else None
+                    if cdn_url:
+                        print(f"  [ReelsCurator] Recovering via direct CDN stream...")
+                        r = requests.get(cdn_url, stream=True, timeout=30)
+                        if r.status_code == 200:
+                            with open(expected_path, "wb") as f_out:
+                                for chunk in r.iter_content(chunk_size=1024*1024):
+                                    if chunk:
+                                        f_out.write(chunk)
+                            uploader2 = clean_handle(info2.get("channel") or info2.get("uploader") or info2.get("uploader_id") or "")
+                            return {
+                                "instagram_url": f"https://www.instagram.com/reel/{shortcode}/",
+                                "shortcode": shortcode,
+                                "uploader_handle": uploader2,
+                                "caption": info2.get("description") or info2.get("title") or "",
+                                "view_count": int(info2.get("view_count") or 0),
+                                "like_count": int(info2.get("like_count") or 0),
+                                "comment_count": int(info2.get("comment_count") or 0),
+                                "upload_date": info2.get("upload_date") or "",
+                                "timestamp": info2.get("timestamp"),
+                                "thumbnail_url": info2.get("thumbnail"),
+                                "local_video_path": str(expected_path),
+                                "video_url": cdn_url
+                            }
+            except Exception as e2:
+                print(f"[ReelsCurator] Recovery download failed: {e2}")
         return None
 
 def is_reel_qualified(meta: Dict[str, Any]) -> Tuple[bool, str]:
@@ -138,21 +190,27 @@ def is_reel_qualified(meta: Dict[str, Any]) -> Tuple[bool, str]:
 
     return False, f"Below thresholds (Views: {views}<=1000, Likes: {likes}<=200, Comments: {comments}<=100)"
 
-def scan_target_handles_for_reels() -> List[Dict[str, Any]]:
+def scan_target_handles_for_reels(force_for_test: bool = False) -> List[Dict[str, Any]]:
     """
-    Monitors all Category 1 to 4 target handles for newly published reels.
+    Monitors all Category 1 to 4 target handles and general HPU keywords for newly published reels.
     Identifies eligible reels, applies cutoff & thresholds, and enqueues them.
     """
-    print(f"\n[ReelsCurator] 🔍 Starting scan across {len(TARGET_REEL_HANDLES)} HPU target handles...")
+    targets = [(h, f'site:instagram.com/reel "{h}"') for h in TARGET_REEL_HANDLES]
+    targets += [
+        ("hpu", 'site:instagram.com/reel "hpu"'),
+        ("himachal_pradesh_university", 'site:instagram.com/reel "himachal pradesh university"'),
+        ("hpushimla", 'site:instagram.com/reel "hpushimla"')
+    ]
+    print(f"\n[ReelsCurator] 🔍 Starting scan across {len(targets)} HPU search targets (40 accounts + campus keywords)...")
     discovered = []
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
     today_str = datetime.now().strftime("%Y-%m-%d")
     tomorrow_str = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    for handle in TARGET_REEL_HANDLES:
+    for handle, query_text in targets:
         try:
-            query = urllib.parse.quote(f'site:instagram.com/reel "{handle}"')
+            query = urllib.parse.quote(query_text)
             rss_url = f"https://news.google.com/rss/search?q={query}&hl=en-IN&gl=IN&ceid=IN:en"
             res = requests.get(rss_url, headers=headers, timeout=10)
             if res.status_code != 200:
@@ -198,7 +256,7 @@ def scan_target_handles_for_reels() -> List[Dict[str, Any]]:
 
                 qualified, reason = is_reel_qualified(meta)
                 print(f"  [ReelsCurator] Reel {shortcode} (@{meta['uploader_handle']}): {reason}")
-                if not qualified:
+                if not qualified and not force_for_test:
                     continue
 
                 # Quota calculation: if today's uploads already reached 15, schedule for tomorrow
@@ -304,7 +362,7 @@ def publish_curated_reel_record(reel_record: Dict[str, Any], dry_run: bool = Fal
         media_id = publish_reel_to_instagram(
             video_url=public_video_url,
             caption=caption,
-            audio_name="Original Audio",
+            audio_name="",
             is_emergency=True,
             is_manual=True
         )

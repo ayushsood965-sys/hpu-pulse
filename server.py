@@ -96,7 +96,7 @@ class StdoutLogInterceptor:
     def __init__(self, original, default_level="INFO"):
         self.original = original
         self.default_level = default_level
-        self.buffer = ""
+        self._line_buffer = ""
 
     def write(self, s):
         try:
@@ -104,9 +104,9 @@ class StdoutLogInterceptor:
             self.original.flush()
         except Exception:
             pass
-        self.buffer += s
-        while "\n" in self.buffer:
-            line, self.buffer = self.buffer.split("\n", 1)
+        self._line_buffer += s
+        while "\n" in self._line_buffer:
+            line, self._line_buffer = self._line_buffer.split("\n", 1)
             line = line.strip()
             if line and not line.startswith("["):
                 if self.default_level == "ERROR":
@@ -127,6 +127,10 @@ class StdoutLogInterceptor:
     @property
     def encoding(self):
         return getattr(self.original, "encoding", "utf-8")
+
+    @property
+    def buffer(self):
+        return getattr(self.original, "buffer", self.original)
 
     def __getattr__(self, name):
         return getattr(self.original, name)
