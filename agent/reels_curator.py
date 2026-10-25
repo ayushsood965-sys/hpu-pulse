@@ -26,6 +26,10 @@ from .db import (
     save_curated_reel,
     get_daily_curated_reels_count,
     get_pending_curated_reels,
+    get_discovered_user_reels,
+    get_curated_reel_by_id,
+    dismiss_discovered_reel,
+    dismiss_all_discovered_reels,
     mark_curated_reel_published,
     update_curated_reel_status,
     record_published_post,
@@ -519,4 +523,162 @@ def crawl_and_publish_single_reel_now(url: str, force: bool = True) -> Dict[str,
         return {"success": True, "message": f"Successfully published reel {shortcode} to Instagram!", "reel": meta}
     else:
         return {"success": False, "error": "Meta Graph API publishing failed", "reel": meta}
+
+# =========================================================================
+# Public / Other Users Viral Reel Discovery Pipeline (Hashtag / Geotag Radar)
+# =========================================================================
+
+PUBLIC_REEL_DISCOVERY_TARGETS = [
+    ("#hpushimla", 'site:instagram.com/reel "#hpushimla"'),
+    ("#hpucampus", 'site:instagram.com/reel "#hpucampus"'),
+    ("#himachalpradeshuniversity", 'site:instagram.com/reel "#himachalpradeshuniversity"'),
+    ("#summerhillshimla", 'site:instagram.com/reel "#summerhillshimla"'),
+    ("#hpushimlalife", 'site:instagram.com/reel "#hpushimlalife"'),
+    ("#hpuuniversity", 'site:instagram.com/reel "#hpuuniversity"'),
+    ("hpu_viral", 'site:instagram.com/reel "HPU Shimla" viral'),
+    ("hpu_summerhill", 'site:instagram.com/reel "HPU Summerhill"'),
+    ("hpu_fest_campus", 'site:instagram.com/reel "HPU" (fest OR campus OR protest OR snowfall OR library)'),
+    ("hpu_students", 'site:instagram.com/reel "HPU Shimla" (students OR reels)')
+]
+
+HPU_RELEVANCE_KEYWORDS = [
+    "hpu", "himachal pradesh university", "summerhill", "summer hill",
+    "shimla university", "hpushimla", "hpucampus", "vc office", "dr. ambedkar",
+    "hpu_shimla", "hpushimlalife", "shimla"
+]
+
+def is_hpu_content_relevant(text: str) -> bool:
+    """Verifies that discovered reel text actually pertains to Himachal Pradesh University."""
+    if not text:
+        return False
+    lower_text = text.lower()
+    return any(kw in lower_text for kw in HPU_RELEVANCE_KEYWORDS)
+
+def scan_public_user_reels(lookback_days: int = REELS_LOOKBACK_DAYS) -> List[Dict[str, Any]]:
+    """
+    Scans public hashtags, locations, and search radar for viral HPU reels from other users.
+    Discovered reels are queued with status 'DISCOVERED_PENDING_REVIEW' (NEVER autoposted).
+    User can review and manually choose to publish one or all to the Instagram page.
+    """
+    cutoff_date, cutoff_str = get_rolling_date_cutoff(lookback_days)
+    active_monitored = [h.lower() for h in get_active_target_handles()]
+    print(f"\n[ReelsCurator] 🌐 Starting Public User Reel Radar across {len(PUBLIC_REEL_DISCOVERY_TARGETS)} hashtag/location queries...")
+    discovered = []
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+    today_str = datetime.now().strftime("%Y-%m-%d")
+
+    for source_label, query_text in PUBLIC_REEL_DISCOVERY_TARGETS:
+        try:
+            query = urllib.parse.quote(query_text)
+            rss_url = f"https://news.google.com/rss/search?q={query}&hl=en-IN&gl=IN&ceid=IN:en"
+            res = requests.get(rss_url, headers=headers, timeout=10)
+            if res.status_code != 200:
+                continue
+
+            root = ET.fromstring(res.content)
+            items = root.findall(".//item")[:10]
+
+            for item in items:
+                pub_date_str = item.find("pubDate").text if item.find("pubDate") is not None else ""
+                article_url = item.find("link").text if item.find("link") is not None else ""
+
+                if not article_url:
+                    continue
+
+                # Quick date check: if older than lookback cutoff date, skip
+                if pub_date_str:
+                    try:
+                        parsed_dt = datetime.strptime(pub_date_str[:16], "%a, %d %b %Y")
+                        if parsed_dt.date() < cutoff_date:
+                            continue
+                    except Exception:
+                        pass
+
+                # Resolve Google News redirect to direct Instagram URL
+                decoded = gnewsdecoder(article_url)
+                if not decoded or not decoded.get("success"):
+                    continue
+
+                direct_url = decoded.get("decoded_url")
+                shortcode = extract_reel_shortcode(direct_url)
+                if not shortcode or is_curated_reel_seen(shortcode):
+                    continue
+
+                # Extract reel metadata via yt-dlp
+                meta = fetch_reel_metadata_and_download(direct_url, download=False)
+                if not meta:
+                    continue
+
+                uploader = (meta.get("uploader_handle") or "").strip().lower()
+                # If this reel is from one of the 40 monitored channels, let the channel pipeline handle it
+                if uploader and uploader in active_monitored:
+                    continue
+
+                # Engagement threshold check (views >= 1000 OR likes >= 200 OR comments >= 100)
+                qualified, reason = is_reel_qualified(meta, lookback_days=lookback_days)
+                if not qualified:
+                    print(f"  [Radar] Reel {shortcode} (@{meta['uploader_handle']}): {reason}")
+                    continue
+
+                # Content relevance check (avoid irrelevant videos using random hashtags)
+                full_text = (meta.get("caption") or "") + " " + (meta.get("uploader_handle") or "") + " " + source_label
+                if not is_hpu_content_relevant(full_text):
+                    print(f"  [Radar] Reel {shortcode} (@{meta['uploader_handle']}) skipped: Content not relevant to HPU.")
+                    continue
+
+                # Enqueue with DISCOVERED_PENDING_REVIEW status - NEVER autoposted!
+                meta["status"] = "DISCOVERED_PENDING_REVIEW"
+                meta["discovery_source"] = f"Hashtag Radar: {source_label}"
+                meta["target_post_date"] = today_str
+
+                reel_id = save_curated_reel(meta)
+                if reel_id:
+                    meta["id"] = reel_id
+                    discovered.append(meta)
+                    print(f"  🌟 [Radar] Discovered public reel #{reel_id} ({shortcode}) by @{meta['uploader_handle']} via {source_label} [QUEUED FOR REVIEW]")
+
+        except Exception as e:
+            print(f"[ReelsCurator] Error scanning public radar query '{source_label}': {e}")
+
+    print(f"[ReelsCurator] 🏁 Public User Reel Radar completed. Found {len(discovered)} potential reels for manual review.\n")
+    return discovered
+
+def publish_single_discovered_reel(reel_id: int, dry_run: bool = False) -> Dict[str, Any]:
+    """
+    Publishes a user-discovered reel from the review queue upon manual confirmation.
+    Attribution is credited to the original creator and today's quota is charged.
+    """
+    reel_record = get_curated_reel_by_id(reel_id)
+    if not reel_record:
+        return {"success": False, "error": f"Discovered reel #{reel_id} not found in database"}
+
+    print(f"\n[ReelsCurator] 🚀 Publishing user-discovered reel #{reel_id} from @{reel_record.get('uploader_handle')}...")
+    success = publish_curated_reel_record(reel_record, dry_run=dry_run)
+    if success:
+        return {"success": True, "message": f"Successfully published reel #{reel_id} to Instagram!", "reel": reel_record}
+    else:
+        return {"success": False, "error": f"Failed to publish reel #{reel_id}. Check server logs or daily quota limits."}
+
+def publish_bulk_discovered_reels(reel_ids: List[int], dry_run: bool = False) -> Dict[str, Any]:
+    """
+    Publishes multiple selected user-discovered reels sequentially with safe interval pacing.
+    """
+    published = []
+    failed = []
+    for rid in reel_ids:
+        res = publish_single_discovered_reel(rid, dry_run=dry_run)
+        if res.get("success"):
+            published.append(rid)
+            time.sleep(15)  # Safe delay between reel uploads to Instagram
+        else:
+            failed.append({"id": rid, "error": res.get("error")})
+
+    return {
+        "success": len(published) > 0,
+        "published_count": len(published),
+        "published_ids": published,
+        "failed_count": len(failed),
+        "failed_items": failed
+    }
 

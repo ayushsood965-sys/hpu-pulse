@@ -95,10 +95,17 @@ def init_db():
             status TEXT DEFAULT 'PENDING',
             target_post_date TEXT,
             instagram_media_id TEXT,
+            discovery_source TEXT DEFAULT 'TARGET_CHANNEL',
             enqueued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             published_at TIMESTAMP
         )
     """)
+
+    # Migration: Ensure discovery_source column exists in curated_reels
+    try:
+        cursor.execute("ALTER TABLE curated_reels ADD COLUMN discovery_source TEXT DEFAULT 'TARGET_CHANNEL'")
+    except Exception:
+        pass
 
     # 6. Monitored Instagram Channels Table
     cursor.execute("""
@@ -456,8 +463,8 @@ def save_curated_reel(data: Dict[str, Any]) -> Optional[int]:
                 instagram_url, shortcode, uploader_handle, caption,
                 view_count, like_count, comment_count, upload_date,
                 video_url, local_video_path, thumbnail_url, status,
-                target_post_date
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                target_post_date, discovery_source
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             data.get("instagram_url", ""),
             shortcode,
@@ -471,7 +478,8 @@ def save_curated_reel(data: Dict[str, Any]) -> Optional[int]:
             data.get("local_video_path", ""),
             data.get("thumbnail_url", ""),
             data.get("status", "PENDING"),
-            data.get("target_post_date", datetime.now().strftime("%Y-%m-%d"))
+            data.get("target_post_date", datetime.now().strftime("%Y-%m-%d")),
+            data.get("discovery_source", "TARGET_CHANNEL")
         ))
         reel_id = cursor.lastrowid
         conn.commit()
@@ -555,6 +563,40 @@ def get_curated_reel_by_id(reel_id: int) -> Optional[Dict[str, Any]]:
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
+
+def get_discovered_user_reels(limit: int = 100) -> List[Dict[str, Any]]:
+    """Returns public user reels discovered from hashtags/mentions waiting for manual user review."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT * FROM curated_reels
+        WHERE status = 'DISCOVERED_PENDING_REVIEW'
+        ORDER BY view_count DESC, id DESC
+        LIMIT ?
+    """, (limit,))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+def dismiss_discovered_reel(reel_id: int) -> bool:
+    """Dismisses a discovered user reel from the review queue."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE curated_reels SET status = 'DISMISSED' WHERE id = ?", (reel_id,))
+    conn.commit()
+    rowcount = cursor.rowcount
+    conn.close()
+    return rowcount > 0
+
+def dismiss_all_discovered_reels() -> int:
+    """Dismisses all currently waiting discovered user reels."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE curated_reels SET status = 'DISMISSED' WHERE status = 'DISCOVERED_PENDING_REVIEW'")
+    conn.commit()
+    count = cursor.rowcount
+    conn.close()
+    return count
 
 # =========================================================================
 # Daily 7:00 PM News Carousel Helper Functions

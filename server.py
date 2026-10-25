@@ -52,7 +52,10 @@ from agent.agent import (
 from agent.reels_curator import (
     manually_enqueue_reel,
     crawl_and_publish_single_reel_now,
-    scan_target_handles_for_reels
+    scan_target_handles_for_reels,
+    scan_public_user_reels,
+    publish_single_discovered_reel,
+    publish_bulk_discovered_reels
 )
 from agent.auto_commenter import process_comments
 from agent.db import (
@@ -62,6 +65,9 @@ from agent.db import (
     get_daily_curated_reels_count,
     get_pending_curated_reels,
     get_published_curated_reels,
+    get_discovered_user_reels,
+    dismiss_discovered_reel,
+    dismiss_all_discovered_reels,
     skip_curated_reel,
     get_today_queued_news_count,
     get_today_queued_news_items,
@@ -440,6 +446,7 @@ def get_status(request: Request, authorization: Optional[str] = Header(None), hp
     daily_curated_count = get_daily_curated_reels_count()
     published_curated = get_published_curated_reels(50)
     pending_curated = get_pending_curated_reels()
+    discovered_user_reels = get_discovered_user_reels(100)
     today_queued_news = get_today_queued_news_items(10)
     today_queued_news_count = get_today_queued_news_count()
     carousel_published_today = get_daily_news_carousel_published_today()
@@ -476,6 +483,10 @@ def get_status(request: Request, authorization: Optional[str] = Header(None), hp
         "monitored_handles_count": len(active_handles),
         "monitored_handles": active_handles,
         "monitored_channels_list": db_channels,
+
+        # Discovered Public User Reels (Manual Review Radar)
+        "discovered_user_reels": discovered_user_reels,
+        "discovered_user_reels_count": len(discovered_user_reels),
 
         # 7:00 PM News Carousel Analytics
         "today_queued_news_count": today_queued_news_count,
@@ -640,6 +651,9 @@ class EditChannelRequest(BaseModel):
     category: Optional[str] = "Target HPU Channel"
     notes: Optional[str] = ""
 
+class BulkPublishDiscoveredRequest(BaseModel):
+    reel_ids: List[int]
+
 @app.post("/api/reels/scan-now")
 def trigger_reels_scan(background_tasks: BackgroundTasks, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
     if not verify_auth(request, authorization, hpu_auth_session):
@@ -756,6 +770,76 @@ def delete_channel_endpoint(identifier: str, request: Request, authorization: Op
         log_event(f"🗑️ Removed monitored channel '{identifier}'")
         return {"success": True, "message": f"Channel '{identifier}' removed successfully"}
     return JSONResponse(status_code=404, content={"error": f"Channel '{identifier}' not found"})
+
+# =========================================================================
+# Discovered User Reels (Public Hashtag Radar) API Endpoints
+# =========================================================================
+
+@app.get("/api/discovered-reels")
+def list_discovered_reels_endpoint(request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    reels = get_discovered_user_reels(100)
+    return {"reels": reels, "count": len(reels)}
+
+@app.post("/api/discovered-reels/scan-now")
+def trigger_discovered_reels_scan(background_tasks: BackgroundTasks, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    log_event("🌐 Starting Public User Reel Radar across hashtags (#hpushimla, #hpucampus)...")
+    def run_public_scan():
+        try:
+            found = scan_public_user_reels()
+            log_event(f"🌟 Public User Reel Radar found {len(found)} viral reels waiting for manual review.")
+        except Exception as e:
+            log_event(f"❌ Error during public user reel radar: {e}", level="ERROR")
+    background_tasks.add_task(run_public_scan)
+    return {"message": "Public User Reel Radar Scan Dispatched in Background!"}
+
+@app.post("/api/discovered-reels/publish/{reel_id}")
+def publish_single_discovered_endpoint(reel_id: int, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    log_event(f"🚀 Manual Publish triggered for discovered reel #{reel_id}...")
+    res = publish_single_discovered_reel(reel_id)
+    if res.get("success"):
+        log_event(f"🎉 Successfully published discovered reel #{reel_id} to Instagram page!")
+        return res
+    return JSONResponse(status_code=400, content=res)
+
+@app.post("/api/discovered-reels/publish-bulk")
+def publish_bulk_discovered_endpoint(req: BulkPublishDiscoveredRequest, background_tasks: BackgroundTasks, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    if not req.reel_ids:
+        return JSONResponse(status_code=400, content={"error": "No reels selected for publishing"})
+    log_event(f"🚀 Bulk Publishing {len(req.reel_ids)} discovered user reels...")
+    def run_bulk_publish():
+        try:
+            res = publish_bulk_discovered_reels(req.reel_ids)
+            log_event(f"🎉 Bulk publish complete: {res.get('published_count')} published, {res.get('failed_count')} failed.")
+        except Exception as e:
+            log_event(f"❌ Error during bulk publishing: {e}", level="ERROR")
+    background_tasks.add_task(run_bulk_publish)
+    return {"message": f"Bulk Publishing of {len(req.reel_ids)} reels dispatched in background!"}
+
+@app.post("/api/discovered-reels/dismiss/{reel_id}")
+def dismiss_discovered_endpoint(reel_id: int, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    ok = dismiss_discovered_reel(reel_id)
+    if ok:
+        log_event(f"🗑️ Discovered reel #{reel_id} dismissed from review queue.")
+        return {"success": True, "message": f"Reel #{reel_id} dismissed"}
+    return JSONResponse(status_code=404, content={"error": f"Reel #{reel_id} not found"})
+
+@app.post("/api/discovered-reels/dismiss-all")
+def dismiss_all_discovered_endpoint(request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    count = dismiss_all_discovered_reels()
+    log_event(f"🗑️ Dismissed all {count} discovered reels from review queue.")
+    return {"success": True, "dismissed_count": count, "message": f"Dismissed {count} reels"}
 
 # =========================================================================
 # Single Daily 7:00 PM News Carousel API Endpoint

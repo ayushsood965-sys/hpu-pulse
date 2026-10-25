@@ -657,6 +657,82 @@
       color: var(--danger);
     }
 
+    /* Discovered User Reels Cards */
+    .discovered-reel-card {
+      background: var(--surface-card);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 16px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .discovered-reel-card:hover {
+      border-color: var(--info);
+      background: rgba(56, 189, 248, 0.08);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+    }
+
+    .discovered-reel-card.selected {
+      border-color: var(--mint);
+      background: rgba(56, 223, 123, 0.09);
+      box-shadow: 0 0 20px var(--mint-glow);
+    }
+
+    .discovered-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .discovered-user-link {
+      color: #fff;
+      font-weight: 700;
+      font-size: 14px;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .discovered-user-link:hover {
+      color: var(--info);
+    }
+
+    .discovered-metrics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 12px;
+      padding: 8px 10px;
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .discovered-caption {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      max-height: 72px;
+      overflow-y: auto;
+    }
+
+    .discovered-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.07);
+      padding-top: 12px;
+      margin-top: auto;
+    }
+
     /* Modal Dialog */
     .modal-overlay {
       position: fixed;
@@ -761,6 +837,7 @@
     <div class="tabs-nav">
       <button class="tab-btn active" data-tab="tab-overview">⚡ Command Overview</button>
       <button class="tab-btn" data-tab="tab-reels">🎬 Curated Reels <span class="tab-badge" id="badge-reels-today">0/15</span></button>
+      <button class="tab-btn" data-tab="tab-user-reels">🌐 Reels Found from Other Users <span class="tab-badge" id="badge-discovered-reels">0</span></button>
       <button class="tab-btn" data-tab="tab-news">📰 7:00 PM News Carousel <span class="tab-badge" id="badge-news-count">0</span></button>
       <button class="tab-btn" data-tab="tab-channels">🎯 Target Channels <span class="tab-badge" id="badge-channels-count">40</span></button>
       <button class="tab-btn" data-tab="tab-logs">💻 Live Logs</button>
@@ -828,6 +905,12 @@
             <span class="action-icon">🔍</span>
             <span class="action-name">Scan Target Reels</span>
             <span class="action-desc">Check monitored HPU channels for qualifying viral reels</span>
+          </button>
+
+          <button class="action-card-btn" id="btn-scan-discovered-now" style="border-color: rgba(56, 189, 248, 0.45); background: rgba(56, 189, 248, 0.08);">
+            <span class="action-icon">🌐</span>
+            <span class="action-name" style="color: var(--info);">Scan Public Viral Radar</span>
+            <span class="action-desc">Discover viral reels from student/public accounts via hashtags</span>
           </button>
 
           <button class="action-card-btn" id="btn-post-reel-now">
@@ -988,6 +1071,60 @@
               <tr><td colspan="6" style="text-align:center; color:var(--text-muted);">Queue is empty.</td></tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: REELS FOUND FROM OTHER USERS -->
+    <div class="tab-pane" id="tab-user-reels">
+      <!-- Public Radar Banner -->
+      <div class="card" style="margin-bottom: 24px; border-left: 4px solid var(--info); background: linear-gradient(135deg, rgba(14, 30, 40, 0.9) 0%, rgba(12, 22, 27, 0.9) 100%);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+          <div>
+            <h3 style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 6px; display:flex; align-items:center; gap:8px;">
+              <span>🌐</span> Reels Found From Other Users (Public Hashtag & Campus Radar)
+            </h3>
+            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; max-width: 820px;">
+              Viral reels discovered from student accounts, visitors, and campus creators via hashtags (<code style="color:var(--mint);">#hpushimla</code>, <code style="color:var(--mint);">#hpucampus</code>, <code style="color:var(--mint);">#summerhillshimla</code>), locations, and mentions.<br>
+              <strong style="color: #F87171;">⚠️ Notice:</strong> These reels are <strong>NEVER autoposted</strong>. Review metrics below, then manually choose one or select all to publish with creator credits.
+            </p>
+          </div>
+          <div style="text-align:right; display:flex; flex-direction:column; gap:6px; align-items:flex-end;">
+            <div style="font-size:28px; font-weight:800; color:var(--info);" id="discovered-reels-count-display">0</div>
+            <div style="font-size:12px; color:var(--text-muted);">Reels Awaiting Review</div>
+            <button class="btn btn-mint" id="btn-trigger-public-scan" style="margin-top:6px;">
+              <span>🔍</span> Scan Public Hashtags Now
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action & Batch Toolbar -->
+      <div class="card" style="margin-bottom: 20px; padding: 14px 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; cursor: pointer; user-select: none;">
+              <input type="checkbox" id="select-all-discovered" style="width: 16px; height: 16px; accent-color: var(--mint); cursor: pointer;">
+              <span>Select All (<span id="selected-discovered-count">0</span>)</span>
+            </label>
+            <span style="color: var(--text-dim);">|</span>
+            <span style="font-size: 12px; color: var(--text-muted);">Criteria: &ge;1,000 Views OR &ge;200 Likes OR &ge;100 Comments (Past 3 Days)</span>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <button class="btn btn-mint" id="btn-publish-selected-reels" disabled style="opacity: 0.5;">
+              <span>🚀</span> Publish Selected (<span id="btn-publish-selected-badge">0</span>)
+            </button>
+            <button class="btn btn-danger" id="btn-dismiss-all-reels">
+              <span>🗑️</span> Dismiss All
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Discovered Reels Grid -->
+      <div id="discovered-reels-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px;">
+        <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-muted);">
+          No user-discovered reels pending review. Click "Scan Public Hashtags Now" to search for viral reels from other accounts.
         </div>
       </div>
     </div>
@@ -1162,6 +1299,8 @@
     let authToken = localStorage.getItem('hpu_auth_token') || '';
     let allMonitoredChannels = [];
     let channelSearchQuery = '';
+    let allDiscoveredUserReels = [];
+    let selectedDiscoveredIds = new Set();
 
     function showToast(msg) {
       const toast = document.getElementById('toast');
@@ -1435,6 +1574,15 @@
         renderChannelsList();
       }
 
+      // Discovered Public User Reels (Public Radar)
+      const discoveredReels = data.discovered_user_reels || [];
+      allDiscoveredUserReels = discoveredReels;
+      const discCountEl = document.getElementById('discovered-reels-count-display');
+      const discBadgeEl = document.getElementById('badge-discovered-reels');
+      if (discCountEl) discCountEl.innerText = discoveredReels.length;
+      if (discBadgeEl) discBadgeEl.innerText = discoveredReels.length;
+      renderDiscoveredReels(discoveredReels);
+
       // Terminal Logs
       const terminal = document.getElementById('terminal-content');
       if (data.logs && data.logs.length) {
@@ -1524,6 +1672,114 @@
           </div>
         </div>
       `).join('');
+    }
+
+    function renderDiscoveredReels(reels) {
+      const container = document.getElementById('discovered-reels-container');
+      if (!container) return;
+
+      if (!reels || !reels.length) {
+        container.innerHTML = `
+          <div style="grid-column: 1 / -1; text-align: center; padding: 48px 20px; background: var(--surface-card); border-radius: 16px; border: 1px dashed var(--border);">
+            <div style="font-size:32px; margin-bottom:10px;">🌐</div>
+            <div style="font-weight:700; color:#fff; font-size:16px; margin-bottom:6px;">No Public User Reels Waiting Review</div>
+            <div style="font-size:13px; color:var(--text-muted); max-width:500px; margin:0 auto 16px;">
+              Click below to scan public hashtags (#hpushimla, #hpucampus) and campus queries for viral reels from other accounts.
+            </div>
+            <button class="btn btn-mint" onclick="triggerPublicRadarScan()">
+              <span>🔍</span> Scan Public Hashtags Now
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = reels.map(r => {
+        const isSelected = selectedDiscoveredIds.has(r.id);
+        return `
+          <div class="discovered-reel-card ${isSelected ? 'selected' : ''}" id="card-discovered-${r.id}">
+            <div class="discovered-header">
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" class="discovered-checkbox" data-id="${r.id}" ${isSelected ? 'checked' : ''} onchange="toggleDiscoveredSelection(${r.id}, this.checked)" style="width:17px; height:17px; accent-color:var(--mint); cursor:pointer;">
+                <a href="https://www.instagram.com/${escapeHtml(r.uploader_handle)}/" target="_blank" class="discovered-user-link">
+                  <span>📸</span> @${escapeHtml(r.uploader_handle)}
+                </a>
+              </label>
+              <span class="tag tag-admission" style="font-size:10px;">${escapeHtml(r.discovery_source || 'Public Tag')}</span>
+            </div>
+
+            <div class="discovered-metrics">
+              <span style="color:var(--info); font-weight:600;">👁️ ${(r.view_count || 0).toLocaleString()}</span>
+              <span style="color:#F472B6; font-weight:600;">❤️ ${(r.like_count || 0).toLocaleString()}</span>
+              <span style="color:var(--mint); font-weight:600;">💬 ${(r.comment_count || 0).toLocaleString()}</span>
+              <span style="color:var(--text-dim); margin-left:auto; font-size:11px;">📅 ${r.upload_date || 'Past 3 days'}</span>
+            </div>
+
+            <div class="discovered-caption">
+              ${r.caption ? escapeHtml(r.caption) : '<span style="color:var(--text-dim); font-style:italic;">No caption provided</span>'}
+            </div>
+
+            <div class="discovered-actions">
+              <a href="${r.instagram_url}" target="_blank" style="color:var(--text-muted); font-size:12px; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+                <span>Original Reel ↗</span>
+              </a>
+              <div style="display:flex; gap:6px;">
+                <button class="btn btn-danger" style="padding:6px 10px; font-size:11px;" onclick="dismissSingleDiscovered(${r.id})">
+                  Dismiss
+                </button>
+                <button class="btn btn-mint" style="padding:6px 12px; font-size:12px;" onclick="publishSingleDiscoveredNow(${r.id})">
+                  <span>🚀</span> Publish
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      updateDiscoveredSelectionUI();
+    }
+
+    window.toggleDiscoveredSelection = function(id, checked) {
+      if (checked) {
+        selectedDiscoveredIds.add(id);
+      } else {
+        selectedDiscoveredIds.delete(id);
+      }
+      updateDiscoveredSelectionUI();
+    };
+
+    function updateDiscoveredSelectionUI() {
+      const count = selectedDiscoveredIds.size;
+      const countEl = document.getElementById('selected-discovered-count');
+      const badgeEl = document.getElementById('btn-publish-selected-badge');
+      const btn = document.getElementById('btn-publish-selected-reels');
+      const selectAllCb = document.getElementById('select-all-discovered');
+
+      if (countEl) countEl.innerText = count;
+      if (badgeEl) badgeEl.innerText = count;
+
+      if (btn) {
+        if (count > 0) {
+          btn.removeAttribute('disabled');
+          btn.style.opacity = '1';
+        } else {
+          btn.setAttribute('disabled', 'true');
+          btn.style.opacity = '0.5';
+        }
+      }
+
+      if (selectAllCb && allDiscoveredUserReels.length > 0) {
+        selectAllCb.checked = (count === allDiscoveredUserReels.length);
+      }
+
+      document.querySelectorAll('.discovered-reel-card').forEach(card => {
+        const id = parseInt(card.id.replace('card-discovered-', ''), 10);
+        if (selectedDiscoveredIds.has(id)) {
+          card.classList.add('selected');
+        } else {
+          card.classList.remove('selected');
+        }
+      });
     }
 
     // Modal Helpers
@@ -1712,6 +1968,104 @@
         .then(r => r.json())
         .then(() => { fetchStatus(); showToast('Logs cleared.'); });
     });
+
+    // Discovered Public Reels Actions
+    const selectAllDiscoveredCb = document.getElementById('select-all-discovered');
+    if (selectAllDiscoveredCb) {
+      selectAllDiscoveredCb.addEventListener('change', (e) => {
+        if (e.target.checked) {
+          allDiscoveredUserReels.forEach(r => selectedDiscoveredIds.add(r.id));
+        } else {
+          selectedDiscoveredIds.clear();
+        }
+        document.querySelectorAll('.discovered-checkbox').forEach(cb => {
+          cb.checked = e.target.checked;
+        });
+        updateDiscoveredSelectionUI();
+      });
+    }
+
+    const btnPubSelected = document.getElementById('btn-publish-selected-reels');
+    if (btnPubSelected) {
+      btnPubSelected.addEventListener('click', () => {
+        const ids = Array.from(selectedDiscoveredIds);
+        if (!ids.length) return;
+        if (!confirm(`Are you sure you want to publish ${ids.length} selected reels to @hpu.pulse with original creator attribution?`)) return;
+
+        showToast(`Publishing ${ids.length} selected reels in background...`);
+        fetch('/api/discovered-reels/publish-bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reel_ids: ids })
+        })
+        .then(r => r.json())
+        .then(d => {
+          showToast(d.message);
+          selectedDiscoveredIds.clear();
+          updateDiscoveredSelectionUI();
+          fetchStatus();
+        })
+        .catch(err => alert('Bulk publish failed: ' + err));
+      });
+    }
+
+    window.publishSingleDiscoveredNow = function(id) {
+      if (!confirm(`Publish this reel to Instagram (@hpu.pulse) immediately with original creator attribution?`)) return;
+      showToast('🚀 Publishing reel to Instagram...');
+      fetch(`/api/discovered-reels/publish/${id}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+          if (d.success) {
+            showToast('🎉 Reel successfully published!');
+            selectedDiscoveredIds.delete(id);
+            fetchStatus();
+          } else {
+            alert('Failed to publish reel: ' + (d.error || 'Unknown error'));
+          }
+        })
+        .catch(err => alert('Publish request failed: ' + err));
+    };
+
+    window.dismissSingleDiscovered = function(id) {
+      fetch(`/api/discovered-reels/dismiss/${id}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+          showToast('Reel dismissed from review.');
+          selectedDiscoveredIds.delete(id);
+          fetchStatus();
+        });
+    };
+
+    const btnDismissAll = document.getElementById('btn-dismiss-all-reels');
+    if (btnDismissAll) {
+      btnDismissAll.addEventListener('click', () => {
+        if (!confirm('Are you sure you want to dismiss all discovered reels currently waiting in the queue?')) return;
+        fetch('/api/discovered-reels/dismiss-all', { method: 'POST' })
+          .then(r => r.json())
+          .then(d => {
+            showToast(d.message);
+            selectedDiscoveredIds.clear();
+            updateDiscoveredSelectionUI();
+            fetchStatus();
+          });
+      });
+    }
+
+    window.triggerPublicRadarScan = function() {
+      showToast('🌐 Scanning public hashtags (#hpushimla, #hpucampus) for viral reels...');
+      fetch('/api/discovered-reels/scan-now', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+          showToast(d.message);
+          fetchStatus();
+        });
+    };
+
+    const btnScanDisc1 = document.getElementById('btn-trigger-public-scan');
+    if (btnScanDisc1) btnScanDisc1.addEventListener('click', triggerPublicRadarScan);
+
+    const btnScanDisc2 = document.getElementById('btn-scan-discovered-now');
+    if (btnScanDisc2) btnScanDisc2.addEventListener('click', triggerPublicRadarScan);
 
     // Manual Reel Ingestion Form
     document.getElementById('manual-reel-form').addEventListener('submit', (e) => {
