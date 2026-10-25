@@ -77,6 +77,29 @@ def init_db():
         )
     """)
 
+    # 5. Curated Instagram Reels Queue & Published Records
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS curated_reels (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            instagram_url TEXT UNIQUE NOT NULL,
+            shortcode TEXT UNIQUE NOT NULL,
+            uploader_handle TEXT NOT NULL,
+            caption TEXT,
+            view_count INTEGER DEFAULT 0,
+            like_count INTEGER DEFAULT 0,
+            comment_count INTEGER DEFAULT 0,
+            upload_date TEXT,
+            video_url TEXT,
+            local_video_path TEXT,
+            thumbnail_url TEXT,
+            status TEXT DEFAULT 'PENDING',
+            target_post_date TEXT,
+            instagram_media_id TEXT,
+            enqueued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            published_at TIMESTAMP
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -377,6 +400,180 @@ def get_all_waiting_items() -> List[Dict[str, Any]]:
             seen_ids.add(item["id"])
             combined.append(item)
     return combined
+
+# =========================================================================
+# Curated Reels Helper Functions (Quota, Dedup, Rollover Queue)
+# =========================================================================
+
+def is_curated_reel_seen(shortcode: str) -> bool:
+    """Checks if a reel shortcode has already been recorded in curated_reels."""
+    if not shortcode:
+        return False
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM curated_reels WHERE shortcode = ? OR instagram_url LIKE ?", (shortcode, f"%{shortcode}%"))
+    row = cursor.fetchone()
+    conn.close()
+    return row is not None
+
+def save_curated_reel(data: Dict[str, Any]) -> Optional[int]:
+    """Saves a qualified curated reel into the queue."""
+    shortcode = data.get("shortcode", "")
+    if is_curated_reel_seen(shortcode):
+        return None
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO curated_reels (
+                instagram_url, shortcode, uploader_handle, caption,
+                view_count, like_count, comment_count, upload_date,
+                video_url, local_video_path, thumbnail_url, status,
+                target_post_date
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            data.get("instagram_url", ""),
+            shortcode,
+            data.get("uploader_handle", "").lstrip("@"),
+            data.get("caption", ""),
+            data.get("view_count", 0),
+            data.get("like_count", 0),
+            data.get("comment_count", 0),
+            data.get("upload_date", ""),
+            data.get("video_url", ""),
+            data.get("local_video_path", ""),
+            data.get("thumbnail_url", ""),
+            data.get("status", "PENDING"),
+            data.get("target_post_date", datetime.now().strftime("%Y-%m-%d"))
+        ))
+        reel_id = cursor.lastrowid
+        conn.commit()
+        return reel_id
+    except sqlite3.IntegrityError:
+        return None
+    finally:
+        conn.close()
+
+def get_daily_curated_reels_count(target_date: Optional[str] = None) -> int:
+    """Returns number of curated reels posted on target_date (default: today)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    d_str = target_date or datetime.now().strftime("%Y-%m-%d")
+    cursor.execute("""
+        SELECT count(*) FROM curated_reels
+        WHERE status = 'PUBLISHED' AND (published_at LIKE ? OR date(published_at) = ?)
+    """, (f"{d_str}%", d_str))
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count
+
+def get_pending_curated_reels(limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Returns pending/queued curated reels ordered by target post date and ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    query = """
+        SELECT * FROM curated_reels
+        WHERE status IN ('PENDING', 'QUEUED_FOR_NEXT_DAY')
+        ORDER BY target_post_date ASC, id ASC
+    """
+    if limit:
+        query += f" LIMIT {int(limit)}"
+    cursor.execute(query)
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+def get_published_curated_reels(limit: int = 50) -> List[Dict[str, Any]]:
+    """Returns list of curated reels that were published to Instagram."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT * FROM curated_reels
+        WHERE status = 'PUBLISHED'
+        ORDER BY published_at DESC LIMIT ?
+    """, (limit,))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+def mark_curated_reel_published(reel_id: int, instagram_media_id: str):
+    """Marks a curated reel as PUBLISHED with media ID and timestamp."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE curated_reels
+        SET status = 'PUBLISHED', instagram_media_id = ?, published_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    """, (instagram_media_id, reel_id))
+    conn.commit()
+    conn.close()
+
+def update_curated_reel_status(reel_id: int, status: str, target_post_date: Optional[str] = None):
+    conn = get_connection()
+    cursor = conn.cursor()
+    if target_post_date:
+        cursor.execute("UPDATE curated_reels SET status = ?, target_post_date = ? WHERE id = ?", (status, target_post_date, reel_id))
+    else:
+        cursor.execute("UPDATE curated_reels SET status = ? WHERE id = ?", (status, reel_id))
+    conn.commit()
+    conn.close()
+
+def skip_curated_reel(reel_id: int):
+    update_curated_reel_status(reel_id, 'SKIPPED')
+
+def get_curated_reel_by_id(reel_id: int) -> Optional[Dict[str, Any]]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM curated_reels WHERE id = ?", (reel_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+# =========================================================================
+# Daily 7:00 PM News Carousel Helper Functions
+# =========================================================================
+
+def get_today_queued_news_count() -> int:
+    """Returns count of news items queued for today's 7 PM carousel."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT count(*) FROM batch_queue WHERE status = 'WAITING'")
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count
+
+def get_today_queued_news_items(limit: int = 10) -> List[Dict[str, Any]]:
+    """Returns waiting items for today's single 7 PM news carousel."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT s.*, b.id as queue_id FROM batch_queue b
+        JOIN scraped_items s ON b.scraped_item_id = s.id
+        WHERE b.status = 'WAITING'
+        ORDER BY 
+            CASE 
+                WHEN s.priority = 'TIER1_BREAKING' THEN 1
+                ELSE 2
+            END ASC,
+            s.scraped_at DESC
+        LIMIT ?
+    """, (limit,))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+def get_daily_news_carousel_published_today() -> bool:
+    """Checks if a routine news carousel has already been published today."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    cursor.execute("""
+        SELECT id FROM published_posts
+        WHERE post_type = 'CAROUSEL' AND (published_at LIKE ? OR date(published_at) = ?)
+    """, (f"{today_str}%", today_str))
+    row = cursor.fetchone()
+    conn.close()
+    return row is not None
 
 # Auto-initialize tables
 init_db()

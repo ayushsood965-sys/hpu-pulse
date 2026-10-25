@@ -6,23 +6,25 @@
   <title>HPU Pulse — 24/7 Autonomous Control Center</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #060B0E;
-      --surface: rgba(13, 23, 28, 0.85);
-      --surface-elevated: rgba(18, 32, 40, 0.95);
-      --border: rgba(46, 117, 75, 0.28);
-      --border-hover: rgba(58, 154, 98, 0.55);
+      --bg: #050A0D;
+      --surface: rgba(12, 22, 27, 0.78);
+      --surface-elevated: rgba(18, 32, 39, 0.92);
+      --surface-card: rgba(22, 40, 48, 0.65);
+      --border: rgba(56, 223, 123, 0.22);
+      --border-hover: rgba(56, 223, 123, 0.55);
       --mint: #38DF7B;
-      --mint-glow: rgba(56, 223, 123, 0.25);
-      --sage: #28724F;
+      --mint-glow: rgba(56, 223, 123, 0.22);
+      --forest: #0D3823;
       --text: #F3F9F5;
-      --text-muted: #8FA699;
+      --text-muted: #8EA498;
+      --text-dim: #5C7267;
       --danger: #FF4D4D;
       --warning: #F59E0B;
       --info: #38BDF8;
-      --card-radius: 16px;
+      --card-radius: 18px;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -31,16 +33,16 @@
       background-color: var(--bg);
       background-image: 
         radial-gradient(circle at 10% 10%, rgba(56, 223, 123, 0.08) 0%, transparent 40%),
-        radial-gradient(circle at 90% 90%, rgba(40, 114, 79, 0.06) 0%, transparent 45%);
+        radial-gradient(circle at 90% 90%, rgba(13, 56, 35, 0.12) 0%, transparent 45%);
       color: var(--text);
       font-family: 'Outfit', sans-serif;
       min-height: 100vh;
-      padding: 24px 20px 60px;
+      padding: 24px 20px 80px;
       -webkit-font-smoothing: antialiased;
     }
 
     .container {
-      max-width: 1360px;
+      max-width: 1420px;
       margin: 0 auto;
     }
 
@@ -48,14 +50,14 @@
     #auth-overlay {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(6, 11, 14, 0.94);
+      background: rgba(5, 10, 13, 0.94);
       backdrop-filter: blur(16px);
       z-index: 9999;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 20px;
-      transition: opacity 0.4s ease, visibility 0.4s ease;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
     }
 
     #auth-overlay.hidden {
@@ -67,13 +69,12 @@
     .login-box {
       background: var(--surface-elevated);
       border: 1px solid var(--border);
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px var(--mint-glow);
-      border-radius: 20px;
-      padding: 40px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7), 0 0 35px var(--mint-glow);
+      border-radius: 24px;
+      padding: 44px;
       width: 100%;
       max-width: 440px;
       text-align: center;
-      position: relative;
       animation: modalSlide 0.3s ease-out;
     }
 
@@ -83,77 +84,68 @@
     }
 
     .lock-icon {
-      width: 60px;
-      height: 60px;
+      width: 64px;
+      height: 64px;
       border-radius: 50%;
       background: rgba(56, 223, 123, 0.12);
       border: 1px solid var(--mint);
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      font-size: 26px;
+      font-size: 28px;
       margin-bottom: 20px;
       color: var(--mint);
-      box-shadow: 0 0 20px var(--mint-glow);
+      box-shadow: 0 0 24px var(--mint-glow);
     }
 
     .login-title {
       font-size: 24px;
       font-weight: 700;
+      letter-spacing: -0.5px;
       margin-bottom: 8px;
-      background: linear-gradient(135deg, #FFF 0%, var(--mint) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
     }
 
     .login-sub {
       color: var(--text-muted);
       font-size: 14px;
-      margin-bottom: 24px;
+      margin-bottom: 28px;
     }
 
     .password-input {
       width: 100%;
       padding: 14px 18px;
-      background: rgba(6, 11, 14, 0.7);
-      border: 1px solid var(--border);
+      background: rgba(8, 16, 20, 0.85);
+      border: 1px solid rgba(56, 223, 123, 0.3);
       border-radius: 12px;
-      color: #FFF;
+      color: #fff;
       font-size: 16px;
       font-family: inherit;
       outline: none;
-      transition: all 0.25s ease;
-      margin-bottom: 16px;
+      transition: all 0.2s ease;
+      margin-bottom: 20px;
     }
 
     .password-input:focus {
       border-color: var(--mint);
-      box-shadow: 0 0 16px var(--mint-glow);
+      box-shadow: 0 0 15px var(--mint-glow);
     }
 
-    .btn-login {
+    .login-btn {
       width: 100%;
       padding: 14px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, var(--mint) 0%, var(--sage) 100%);
-      border: none;
-      color: #060B0E;
+      background: linear-gradient(135deg, var(--mint) 0%, #29A859 100%);
+      color: #05160C;
       font-weight: 700;
       font-size: 15px;
+      border: none;
+      border-radius: 12px;
       cursor: pointer;
-      transition: all 0.25s ease;
+      transition: all 0.2s ease;
     }
 
-    .btn-login:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px var(--mint-glow);
-    }
-
-    .login-error {
-      color: var(--danger);
-      font-size: 13px;
-      margin-top: 12px;
-      min-height: 18px;
+    .login-btn:hover {
+      box-shadow: 0 0 25px var(--mint-glow);
+      transform: translateY(-1px);
     }
 
     /* Header */
@@ -161,893 +153,1186 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding-bottom: 24px;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 30px;
+      margin-bottom: 28px;
       flex-wrap: wrap;
       gap: 16px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(56, 223, 123, 0.15);
     }
 
     .brand {
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 14px;
     }
 
-    .brand-icon {
+    .brand-crest {
       width: 48px;
       height: 48px;
-      background: rgba(56, 223, 123, 0.12);
-      border: 1px solid var(--mint);
       border-radius: 14px;
+      background: linear-gradient(135deg, rgba(56, 223, 123, 0.2), rgba(13, 56, 35, 0.5));
+      border: 1px solid var(--border);
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 24px;
+      box-shadow: 0 0 20px var(--mint-glow);
     }
 
     .brand-title {
       font-size: 26px;
       font-weight: 800;
-      letter-spacing: -0.5px;
-      background: linear-gradient(135deg, #FFF 0%, var(--mint) 100%);
+      letter-spacing: -0.6px;
+      background: linear-gradient(135deg, #FFFFFF 30%, var(--mint) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
-    .brand-sub {
-      font-size: 13px;
-      color: var(--text-muted);
-      letter-spacing: 0.5px;
+    .brand-tag {
+      font-size: 12px;
+      color: var(--mint);
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
     }
 
     .header-actions {
       display: flex;
       align-items: center;
       gap: 12px;
-      flex-wrap: wrap;
     }
 
-    .status-badge {
+    .badge-pill {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 16px;
-      border-radius: 999px;
+      padding: 6px 14px;
+      border-radius: 20px;
       font-size: 13px;
       font-weight: 600;
-      background: rgba(56, 223, 123, 0.12);
-      border: 1px solid rgba(56, 223, 123, 0.4);
-      color: var(--mint);
-      box-shadow: 0 0 16px var(--mint-glow);
+      background: rgba(12, 22, 27, 0.85);
+      border: 1px solid var(--border);
     }
 
-    .status-badge.stopped {
-      background: rgba(255, 77, 77, 0.12);
-      border-color: rgba(255, 77, 77, 0.4);
-      color: var(--danger);
-      box-shadow: 0 0 16px rgba(255, 77, 77, 0.2);
-    }
-
-    .pulse-dot {
+    .dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: currentColor;
-      animation: pulse 1.8s infinite;
     }
 
-    @keyframes pulse {
-      0% { transform: scale(0.9); opacity: 1; }
-      50% { transform: scale(1.4); opacity: 0.5; }
-      100% { transform: scale(0.9); opacity: 1; }
-    }
+    .dot.live { background: var(--mint); box-shadow: 0 0 10px var(--mint); }
+    .dot.warn { background: var(--warning); box-shadow: 0 0 10px var(--warning); }
+    .dot.danger { background: var(--danger); box-shadow: 0 0 10px var(--danger); }
 
     .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
       padding: 9px 18px;
-      border-radius: 10px;
+      border-radius: 11px;
       font-size: 13px;
       font-weight: 600;
       cursor: pointer;
-      border: 1px solid transparent;
-      transition: all 0.2s ease;
       font-family: inherit;
-      color: #FFF;
-      background: var(--surface-elevated);
+      border: 1px solid transparent;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
     }
 
-    .btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    .btn-mint {
+      background: linear-gradient(135deg, var(--mint) 0%, #29A859 100%);
+      color: #05160C;
     }
 
-    .btn-restart {
-      border-color: rgba(56, 189, 248, 0.4);
-      color: var(--info);
+    .btn-mint:hover {
+      box-shadow: 0 0 18px var(--mint-glow);
+      transform: translateY(-1px);
     }
-    .btn-restart:hover { background: rgba(56, 189, 248, 0.15); }
 
-    .btn-stop {
-      border-color: rgba(255, 77, 77, 0.4);
+    .btn-surface {
+      background: var(--surface-card);
+      color: var(--text);
+      border-color: var(--border);
+    }
+
+    .btn-surface:hover {
+      border-color: var(--mint);
+      color: var(--mint);
+    }
+
+    .btn-danger {
+      background: rgba(255, 77, 77, 0.15);
       color: var(--danger);
+      border-color: rgba(255, 77, 77, 0.3);
     }
-    .btn-stop:hover { background: rgba(255, 77, 77, 0.15); }
 
-    .btn-start {
-      border-color: rgba(56, 223, 123, 0.4);
+    .btn-danger:hover {
+      background: rgba(255, 77, 77, 0.25);
+    }
+
+    /* Tabs */
+    .tabs-nav {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid rgba(56, 223, 123, 0.15);
+      margin-bottom: 26px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+
+    .tab-btn {
+      padding: 10px 20px;
+      border-radius: 12px;
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid transparent;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover {
+      color: var(--text);
+      background: rgba(56, 223, 123, 0.06);
+    }
+
+    .tab-btn.active {
+      color: var(--mint);
+      background: rgba(56, 223, 123, 0.12);
+      border-color: rgba(56, 223, 123, 0.35);
+      box-shadow: 0 0 16px var(--mint-glow);
+    }
+
+    .tab-badge {
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(56, 223, 123, 0.2);
       color: var(--mint);
     }
-    .btn-start:hover { background: rgba(56, 223, 123, 0.15); }
 
-    .btn-logout {
-      border-color: rgba(255, 255, 255, 0.15);
-      color: var(--text-muted);
+    .tab-pane {
+      display: none;
+      animation: fadeIn 0.25s ease;
     }
 
-    /* Grid Stats */
-    .grid-stats {
+    .tab-pane.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Cards & Grids */
+    .grid-metrics {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-      gap: 16px;
-      margin-bottom: 28px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 18px;
+      margin-bottom: 26px;
     }
 
-    .stat-card {
+    .card {
       background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--card-radius);
-      padding: 20px;
-      position: relative;
-      overflow: hidden;
-      transition: all 0.25s ease;
-      backdrop-filter: blur(10px);
-    }
-
-    .stat-card:hover {
-      border-color: var(--border-hover);
-      transform: translateY(-2px);
-    }
-
-    .stat-label {
-      font-size: 12px;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      margin-bottom: 6px;
-    }
-
-    .stat-val {
-      font-size: 28px;
-      font-weight: 800;
-      color: #FFF;
-      letter-spacing: -0.5px;
-    }
-
-    .stat-val.uptime {
-      font-size: 21px;
-      font-family: 'JetBrains Mono', monospace;
-      color: var(--mint);
-    }
-
-    .stat-sub {
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-top: 4px;
-    }
-
-    /* Action Toolbar */
-    .action-panel {
-      background: var(--surface);
+      backdrop-filter: blur(12px);
       border: 1px solid var(--border);
       border-radius: var(--card-radius);
       padding: 22px;
-      margin-bottom: 28px;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.25s ease;
     }
 
-    .section-title {
-      font-size: 16px;
+    .card:hover {
+      border-color: var(--border-hover);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    .card-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.8px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-value {
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -0.8px;
+      color: #fff;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .card-sub {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+
+    .progress-bar {
+      height: 7px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-top: 12px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--mint), #29A859);
+      border-radius: 6px;
+      transition: width 0.4s ease;
+    }
+
+    /* Actions Panel */
+    .command-hub {
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--card-radius);
+      padding: 24px;
+      margin-bottom: 26px;
+      box-shadow: 0 10px 35px rgba(0, 0, 0, 0.3);
+    }
+
+    .command-hub-title {
+      font-size: 17px;
       font-weight: 700;
       margin-bottom: 16px;
       display: flex;
       align-items: center;
       gap: 10px;
+      color: var(--mint);
     }
 
-    .action-grid {
+    .actions-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
     }
 
-    .action-btn {
-      display: flex;
-      align-items: center;
-      gap: 14px;
+    .action-card-btn {
+      background: rgba(18, 32, 40, 0.85);
+      border: 1px solid rgba(56, 223, 123, 0.25);
+      border-radius: 14px;
       padding: 16px;
-      border-radius: 12px;
-      background: var(--surface-elevated);
-      border: 1px solid var(--border);
-      color: #FFF;
+      color: var(--text);
       cursor: pointer;
       text-align: left;
-      transition: all 0.25s ease;
       font-family: inherit;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
 
-    .action-btn:hover {
+    .action-card-btn:hover {
+      background: rgba(56, 223, 123, 0.12);
       border-color: var(--mint);
-      background: rgba(56, 223, 123, 0.08);
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+      box-shadow: 0 6px 20px var(--mint-glow);
     }
 
     .action-icon {
-      font-size: 24px;
-      width: 44px;
-      height: 44px;
-      border-radius: 10px;
-      background: rgba(255, 255, 255, 0.05);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .action-title {
-      font-size: 14px;
-      font-weight: 700;
+      font-size: 22px;
       margin-bottom: 2px;
     }
 
+    .action-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+    }
+
     .action-desc {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--text-muted);
+      line-height: 1.4;
     }
 
-    /* Main Grid Split */
-    .dashboard-grid {
-      display: grid;
-      grid-template-columns: 1.15fr 0.85fr;
-      gap: 24px;
+    /* Tables */
+    .table-responsive {
+      overflow-x: auto;
+      border-radius: var(--card-radius);
+      border: 1px solid var(--border);
+      background: var(--surface);
     }
 
-    @media (max-width: 1080px) {
-      .dashboard-grid {
-        grid-template-columns: 1fr;
-      }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
     }
 
-    /* Terminal Console */
-    .terminal-card {
-      background: #040709;
+    th {
+      background: rgba(18, 32, 39, 0.95);
+      padding: 14px 18px;
+      font-weight: 700;
+      color: var(--mint);
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.6px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(56, 223, 123, 0.08);
+      color: var(--text);
+    }
+
+    tr:hover td {
+      background: rgba(56, 223, 123, 0.04);
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+
+    .tag-result { background: rgba(16, 185, 129, 0.15); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .tag-exam { background: rgba(245, 158, 11, 0.15); color: #FBBF24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .tag-admission { background: rgba(56, 189, 248, 0.15); color: #38BDF8; border: 1px solid rgba(56, 189, 248, 0.3); }
+    .tag-breaking { background: rgba(239, 68, 68, 0.15); color: #F87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .tag-general { background: rgba(56, 223, 123, 0.15); color: var(--mint); border: 1px solid var(--border); }
+
+    /* Terminal Logs */
+    .terminal-box {
+      background: #04080B;
       border: 1px solid var(--border);
       border-radius: var(--card-radius);
       padding: 20px;
-      display: flex;
-      flex-direction: column;
-      height: 520px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-    }
-
-    .terminal-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 14px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .terminal-title {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 13px;
-      color: var(--mint);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .terminal-actions {
-      display: flex;
-      gap: 8px;
-    }
-
-    .terminal-body {
-      flex: 1;
-      overflow-y: auto;
       font-family: 'JetBrains Mono', monospace;
       font-size: 12px;
+      height: 480px;
+      overflow-y: auto;
       line-height: 1.6;
-      color: #D1D5DB;
-      padding-right: 8px;
-    }
-
-    .terminal-body::-webkit-scrollbar {
-      width: 6px;
-    }
-    .terminal-body::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.15);
-      border-radius: 4px;
     }
 
     .log-line {
-      margin-bottom: 4px;
-      word-break: break-all;
+      margin-bottom: 6px;
+      display: flex;
+      gap: 12px;
     }
 
-    .log-ts { color: #64748B; margin-right: 6px; }
-    .log-level-INFO { color: var(--info); font-weight: 600; margin-right: 6px; }
-    .log-level-WARN { color: var(--warning); font-weight: 600; margin-right: 6px; }
-    .log-level-ERROR { color: var(--danger); font-weight: 600; margin-right: 6px; }
+    .log-time { color: var(--text-dim); }
+    .log-level-INFO { color: var(--mint); }
+    .log-level-WARN { color: var(--warning); }
+    .log-level-ERROR { color: var(--danger); font-weight: 600; }
+    .log-msg { color: var(--text); word-break: break-all; }
 
-    /* Tables & Queue */
-    .side-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--card-radius);
-      padding: 20px;
-      margin-bottom: 24px;
+    /* Channels Grid */
+    .handles-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
     }
 
-    .queue-list {
-      max-height: 240px;
-      overflow-y: auto;
-    }
-
-    .queue-item {
+    .handle-card {
+      background: var(--surface-card);
+      border: 1px solid rgba(56, 223, 123, 0.18);
+      border-radius: 14px;
+      padding: 14px 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 12px;
-      background: var(--surface-elevated);
-      border-radius: 8px;
-      margin-bottom: 8px;
-      font-size: 13px;
-    }
-
-    .queue-cat {
-      font-size: 10px;
-      font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 6px;
-      background: rgba(56, 223, 123, 0.15);
-      color: var(--mint);
-      margin-right: 10px;
-      flex-shrink: 0;
-    }
-
-    .queue-title {
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      flex: 1;
-    }
-
-    /* History Feed */
-    .history-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px;
-      background: var(--surface-elevated);
-      border-radius: 10px;
-      margin-bottom: 8px;
       transition: all 0.2s ease;
     }
 
-    .history-item:hover {
-      background: rgba(56, 223, 123, 0.06);
+    .handle-card:hover {
+      border-color: var(--mint);
+      background: rgba(56, 223, 123, 0.08);
+      transform: translateY(-1px);
     }
 
-    .history-link {
-      color: var(--mint);
+    .handle-link {
+      color: #fff;
       text-decoration: none;
       font-weight: 600;
-      font-size: 12px;
-      display: inline-flex;
+      font-size: 14px;
+      display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 8px;
     }
 
-    .history-link:hover {
-      text-decoration: underline;
+    .handle-link:hover {
+      color: var(--mint);
     }
 
-    .toast {
+    /* Modal / Alert Notification Toast */
+    #toast {
       position: fixed;
       bottom: 24px;
       right: 24px;
       padding: 14px 22px;
       background: var(--surface-elevated);
       border: 1px solid var(--mint);
-      border-radius: 12px;
-      color: #FFF;
-      font-weight: 600;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px var(--mint-glow);
+      border-radius: 14px;
+      color: #fff;
       font-size: 14px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.6), 0 0 15px var(--mint-glow);
-      transform: translateY(100px);
-      opacity: 0;
-      transition: all 0.3s ease;
+      font-weight: 600;
       z-index: 10000;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.3s ease;
+      pointer-events: none;
     }
 
-    .toast.show {
-      transform: translateY(0);
+    #toast.show {
       opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
     }
   </style>
 </head>
 <body>
 
-  <!-- Password Protected Lock Screen -->
+  <!-- Auth Overlay -->
   <div id="auth-overlay">
     <div class="login-box">
       <div class="lock-icon">🔒</div>
-      <h2 class="login-title">HPU Pulse Admin</h2>
-      <p class="login-sub">24/7 Autonomous News Agent Control Center</p>
-      <input type="password" id="admin-pass" class="password-input" placeholder="Enter Access Password..." autofocus>
-      <button class="btn-login" id="btn-submit-pass" onclick="handleLogin()">Unlock Control Center</button>
-      <div class="login-error" id="login-error"></div>
+      <h2 class="login-title">HPU Pulse Control Center</h2>
+      <p class="login-sub">Enter dashboard administrator password to access live controls.</p>
+      <form id="login-form">
+        <input type="password" id="login-password" class="password-input" placeholder="Admin Password" required autofocus autocomplete="current-password">
+        <button type="submit" class="login-btn">Authenticate & Access</button>
+      </form>
     </div>
   </div>
 
-  <div class="container" id="dashboard-content">
+  <!-- Toast -->
+  <div id="toast">Action dispatched</div>
+
+  <div class="container">
+    <!-- Header -->
     <header>
       <div class="brand">
-        <div class="brand-icon">🏛</div>
+        <div class="brand-crest">🏛️</div>
         <div>
-          <h1 class="brand-title">HPU Pulse</h1>
-          <div class="brand-sub">Autonomous Student News & Circulars Agent • @hpu.pulse</div>
+          <h1 class="brand-title">HPU PULSE • AUTONOMOUS AGENT</h1>
+          <div class="brand-tag">24/7 Instagram Intelligence, Curated Reels & Daily Roundup</div>
         </div>
       </div>
-
       <div class="header-actions">
-        <div class="status-badge" id="agent-status-badge">
-          <div class="pulse-dot"></div>
-          <span id="status-text">INITIALIZING...</span>
+        <div class="badge-pill">
+          <span class="dot live" id="agent-status-dot"></span>
+          <span id="agent-status-text">Checking...</span>
         </div>
-
-        <button class="btn btn-restart" onclick="triggerAction('/api/restart', 'Restarting Agent...')">
-          🔄 Restart
-        </button>
-        <button class="btn btn-stop" id="btn-toggle-agent" onclick="toggleAgent()">
-          🛑 Stop
-        </button>
-        <button class="btn btn-logout" onclick="handleLogout()">
-          🔓 Logout
-        </button>
+        <div class="badge-pill">
+          <span>Meta API:</span>
+          <span id="token-status-pill" style="color: var(--mint); font-weight:700;">Valid</span>
+        </div>
+        <button class="btn btn-surface" id="btn-logout">Logout</button>
       </div>
     </header>
 
-    <!-- Metrics Grid -->
-    <div class="grid-stats">
-      <div class="stat-card">
-        <div class="stat-label">System Uptime</div>
-        <div class="stat-val uptime" id="metric-uptime">00:00:00</div>
-        <div class="stat-sub" id="metric-last-action">Agent Active</div>
+    <!-- Navigation Tabs -->
+    <div class="tabs-nav">
+      <button class="tab-btn active" data-tab="tab-overview">⚡ Command Overview</button>
+      <button class="tab-btn" data-tab="tab-reels">🎬 Curated Reels <span class="tab-badge" id="badge-reels-today">0/15</span></button>
+      <button class="tab-btn" data-tab="tab-news">📰 7:00 PM News Carousel <span class="tab-badge" id="badge-news-count">0</span></button>
+      <button class="tab-btn" data-tab="tab-channels">🎯 40 Target Channels</button>
+      <button class="tab-btn" data-tab="tab-logs">💻 Live Logs</button>
+      <button class="tab-btn" data-tab="tab-settings">⚙️ Settings & Credentials</button>
+    </div>
+
+    <!-- TAB 1: OVERVIEW -->
+    <div class="tab-pane active" id="tab-overview">
+      <div class="grid-metrics">
+        <!-- Metric 1: Curated Reels Daily Quota -->
+        <div class="card">
+          <div class="card-label">
+            <span>Today's Curated Reels Quota</span>
+            <span style="color: var(--mint); font-weight:700;">MAX 15/DAY</span>
+          </div>
+          <div class="card-value">
+            <span id="overview-reels-count">0</span>
+            <span style="font-size:16px; color:var(--text-muted); font-weight:500;">/ 15 published</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="reels-progress-fill" style="width: 0%;"></div>
+          </div>
+          <div class="card-sub" id="overview-reels-rollover">0 queued for next day</div>
+        </div>
+
+        <!-- Metric 2: 7:00 PM Daily News Carousel -->
+        <div class="card">
+          <div class="card-label">
+            <span>Daily 7:00 PM News Carousel</span>
+            <span id="carousel-status-pill" class="tag tag-general">Ready 19:00</span>
+          </div>
+          <div class="card-value">
+            <span id="overview-news-queued">0</span>
+            <span style="font-size:16px; color:var(--text-muted); font-weight:500;">stories queued</span>
+          </div>
+          <div class="card-sub" id="carousel-today-status">Status: Waiting for 7:00 PM schedule</div>
+        </div>
+
+        <!-- Metric 3: Total Circulars & Scraping -->
+        <div class="card">
+          <div class="card-label">Total Indexed Circulars</div>
+          <div class="card-value" id="overview-indexed-count">0</div>
+          <div class="card-sub">From official portals & regional newspapers</div>
+        </div>
+
+        <!-- Metric 4: All-Time Published Posts -->
+        <div class="card">
+          <div class="card-label">All-Time Published Media</div>
+          <div class="card-value" id="overview-published-count">0</div>
+          <div class="card-sub" id="overview-uptime">Uptime: 0h 0m</div>
+        </div>
       </div>
 
-      <div class="stat-card">
-        <div class="stat-label">Indexed Circulars</div>
-        <div class="stat-val" id="metric-indexed">0</div>
-        <div class="stat-sub">From HPU Portals & RSS</div>
+      <!-- Action Control Hub -->
+      <div class="command-hub">
+        <div class="command-hub-title">⚡ Instant Automation Command Center</div>
+        <div class="actions-grid">
+          <button class="action-card-btn" id="btn-crawl-now">
+            <span class="action-icon">🕷️</span>
+            <span class="action-name">Crawl Portals & News</span>
+            <span class="action-desc">Index fresh notices from portals, Amar Ujala, Tribune</span>
+          </button>
+
+          <button class="action-card-btn" id="btn-7pm-now">
+            <span class="action-icon">📰</span>
+            <span class="action-name">Publish 7 PM Carousel</span>
+            <span class="action-desc">Generate & post today's multi-story news roundup instantly</span>
+          </button>
+
+          <button class="action-card-btn" id="btn-scan-reels-now">
+            <span class="action-icon">🔍</span>
+            <span class="action-name">Scan Target Reels</span>
+            <span class="action-desc">Check 40 monitored HPU channels for qualifying reels</span>
+          </button>
+
+          <button class="action-card-btn" id="btn-post-reel-now">
+            <span class="action-icon">🎬</span>
+            <span class="action-name">Post Next Reel</span>
+            <span class="action-desc">Publish next eligible queued reel with creator credits</span>
+          </button>
+
+          <button class="action-card-btn" id="btn-toggle-agent">
+            <span class="action-icon">⏯️</span>
+            <span class="action-name" id="agent-toggle-text">Pause Scheduler</span>
+            <span class="action-desc">Start or stop autonomous background task workers</span>
+          </button>
+        </div>
       </div>
 
-      <div class="stat-card">
-        <div class="stat-label">Batch Queue</div>
-        <div class="stat-val" id="metric-queued" style="color: var(--mint);">0</div>
-        <div class="stat-sub">Waiting for Next Cycle</div>
+      <!-- Next Scheduled Jobs -->
+      <div class="card" style="margin-bottom: 26px;">
+        <div class="card-label">Next Scheduled Automation Timetable</div>
+        <div id="next-jobs-list" style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px;">
+          <!-- Dynamically populated -->
+        </div>
       </div>
 
-      <div class="stat-card">
-        <div class="stat-label">Daily Posts Cap</div>
-        <div class="stat-val" id="metric-daily-posts" style="color: #38BDF8;">0 / 2</div>
-        <div class="stat-sub">12h Spacing (Max 2/Day)</div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-label">Total Published</div>
-        <div class="stat-val" id="metric-published">0</div>
-        <div class="stat-sub">Live on Instagram Feed</div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-label">Comment Replies</div>
-        <div class="stat-val" id="metric-replies">0</div>
-        <div class="stat-sub">Autonomous Student Support</div>
+      <!-- Recent Published Posts History -->
+      <div class="card">
+        <div class="card-label">Recent Instagram Activity Feed</div>
+        <div class="table-responsive" style="margin-top: 12px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Headline / Title</th>
+                <th>Category</th>
+                <th>Time (IST)</th>
+                <th>Media Link</th>
+              </tr>
+            </thead>
+            <tbody id="recent-posts-tbody">
+              <tr><td colspan="5" style="text-align:center; color:var(--text-muted);">Loading recent posts...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
-    <!-- Meta Token Expiry Alert Banner -->
-    <div id="meta-token-warning" style="display: none; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 14px; padding: 14px 20px; margin-bottom: 24px; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
-      <div style="display: flex; align-items: center; gap: 12px;">
-        <span style="font-size: 24px;">⚠️</span>
-        <div>
-          <strong style="color: #F87171; font-size: 14px;">Meta Instagram Token Expired / Needs Renewal</strong>
-          <div id="meta-token-error-desc" style="color: #9CA3AF; font-size: 12px; margin-top: 2px;">Meta OAuth rejected API requests. Click update to paste a fresh token.</div>
-        </div>
-      </div>
-      <button class="btn" style="background: #EF4444; color: #FFF; font-weight: 700; border: none; padding: 8px 16px;" onclick="openTokenModal()">
-        Update Meta Token
-      </button>
-    </div>
-
-    <!-- Quick Action Controls -->
-    <div class="action-panel">
-      <div class="section-title">⚡ Instant Workflow Triggers (Manual Posting Has No Limits)</div>
-      <div class="action-grid">
-        <div class="action-btn" onclick="triggerAction('/api/crawl-now', 'Multi-Source Crawl Dispatched!')">
-          <div class="action-icon">🕷</div>
+    <!-- TAB 2: CURATED REELS CENTER -->
+    <div class="tab-pane" id="tab-reels">
+      <!-- Rules & Filter Banner -->
+      <div class="card" style="margin-bottom: 24px; border-left: 4px solid var(--mint);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
           <div>
-            <div class="action-title">Run 6h Crawl</div>
-            <div class="action-desc">Crawl portals, newspapers & IG</div>
+            <h3 style="font-size:16px; font-weight:700; color:#fff; margin-bottom:4px;">🎯 Autonomous Reels Curation Pipeline Rules</h3>
+            <p style="font-size:13px; color:var(--text-muted);">
+              • Date Cutoff: Uploaded on or after <strong>25 October 2026</strong> only.<br>
+              • Engagement Threshold: <strong>Views > 1000</strong> OR <strong>Likes > 200</strong> OR <strong>Comments > 100</strong>.<br>
+              • Daily Limit: Strict maximum of <strong>15 reels per day</strong>. Overflows automatically rollover to the next day's quota.
+            </p>
           </div>
-        </div>
-
-        <div class="action-btn" onclick="triggerAction('/api/publish-queue-now', 'Auto Posting Queue (1-2 Reel / 3+ Carousel • No Daily Limit)...')">
-          <div class="action-icon">⚡</div>
-          <div>
-            <div class="action-title">Auto Post Queue Now</div>
-            <div class="action-desc">1-2: Video Reel | 3+: Carousel (No limit)</div>
-          </div>
-        </div>
-
-        <div class="action-btn" onclick="triggerAction('/api/publish-carousel-now', 'Publishing Carousel Post Instantly to Live Instagram...')">
-          <div class="action-icon">📚</div>
-          <div>
-            <div class="action-title">Publish Carousel Post</div>
-            <div class="action-desc">Push multi-slide carousel live instantly</div>
-          </div>
-        </div>
-
-        <div class="action-btn" onclick="triggerAction('/api/publish-reel-now', 'Generating & Publishing Video Reel Instantly...')">
-          <div class="action-icon">🎬</div>
-          <div>
-            <div class="action-title">Publish Video Reel</div>
-            <div class="action-desc">Push 9:16 vertical video reel live instantly</div>
-          </div>
-        </div>
-
-        <div class="action-btn" onclick="triggerAction('/api/scan-comments', 'Comment Responder Running...')">
-          <div class="action-icon">💬</div>
-          <div>
-            <div class="action-title">Scan & Reply Comments</div>
-            <div class="action-desc">Resolve student inquiries via AI</div>
-          </div>
-        </div>
-
-        <div class="action-btn" onclick="openTokenModal()">
-          <div class="action-icon">🔑</div>
-          <div>
-            <div class="action-title">Update Meta Token</div>
-            <div class="action-desc">Paste fresh Access Token</div>
+          <div style="text-align:right;">
+            <div style="font-size:24px; font-weight:800; color:var(--mint);" id="reels-quota-display">0 / 15</div>
+            <div style="font-size:12px; color:var(--text-muted);">Today's Quota Used</div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Main Split Section -->
-    <div class="dashboard-grid">
-      <!-- Live Log Terminal -->
-      <div class="terminal-card">
-        <div class="terminal-header">
-          <div class="terminal-title">
-            <span>●</span> LIVE AGENT STDOUT STREAM
-          </div>
-          <div class="terminal-actions">
-            <button class="btn btn-logout" style="padding: 4px 10px; font-size: 11px;" onclick="triggerAction('/api/clear-logs', 'Logs Cleared')">Clear</button>
-          </div>
+      <!-- Manual Reel Enqueue Bar -->
+      <div class="card" style="margin-bottom: 24px;">
+        <div class="card-label">➕ Manual Reel Link Ingestion</div>
+        <form id="manual-reel-form" style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+          <input type="url" id="manual-reel-url" class="password-input" style="margin-bottom:0; flex:1; min-width:300px;" placeholder="https://www.instagram.com/reel/XXXXX/ or post link" required>
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-muted); cursor: pointer;">
+            <input type="checkbox" id="manual-reel-force"> Force (Bypass threshold)
+          </label>
+          <button type="submit" class="btn btn-mint">Analyze & Enqueue</button>
+        </form>
+      </div>
+
+      <!-- Shared Curated Reels History -->
+      <div class="card" style="margin-bottom: 24px;">
+        <div class="card-label">
+          <span>Shared Curated Reels History</span>
+          <span style="font-size:12px; color:var(--mint);">Credited to Original Creator</span>
         </div>
-        <div class="terminal-body" id="terminal-body">
-          <div class="log-line"><span class="log-ts">--:--:--</span> Connecting to live log buffer...</div>
+        <div class="table-responsive" style="margin-top: 12px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Original Creator</th>
+                <th>Views / Likes / Comments</th>
+                <th>Shared At (IST)</th>
+                <th>Original Post</th>
+                <th>Instagram Published Link</th>
+              </tr>
+            </thead>
+            <tbody id="published-reels-tbody">
+              <tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No curated reels published yet.</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
-      <!-- Right Column: Queue & History -->
-      <div>
-        <!-- Waiting Queue Card -->
-        <div class="side-card">
-          <div class="section-title">⏳ Waiting Batch Queue (<span id="queue-count-badge">0</span>)</div>
-          <div class="queue-list" id="queue-list">
-            <div style="color: var(--text-muted); font-size: 13px;">No items waiting in batch queue.</div>
-          </div>
+      <!-- Pending & Rollover Queue -->
+      <div class="card">
+        <div class="card-label">
+          <span>Pending & Rollover Queue</span>
+          <span id="pending-reels-count-badge" class="tag tag-general">0 Waiting</span>
         </div>
-
-        <!-- Recent Published Posts -->
-        <div class="side-card">
-          <div class="section-title">🚀 Recent Published Posts</div>
-          <div id="history-list">
-            <div style="color: var(--text-muted); font-size: 13px;">No posts recorded yet.</div>
-          </div>
+        <div class="table-responsive" style="margin-top: 12px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Source Handle</th>
+                <th>Engagement Metrics</th>
+                <th>Scheduled Date</th>
+                <th>Status</th>
+                <th>Original Reel</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="pending-reels-tbody">
+              <tr><td colspan="6" style="text-align:center; color:var(--text-muted);">Queue is empty.</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
+
+    <!-- TAB 3: DAILY 7:00 PM NEWS CAROUSEL QUEUE -->
+    <div class="tab-pane" id="tab-news">
+      <div class="card" style="margin-bottom: 24px; border-left: 4px solid var(--info);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div>
+            <h3 style="font-size:16px; font-weight:700; color:#fff; margin-bottom:4px;">📰 Daily 7:00 PM News Carousel Queue</h3>
+            <p style="font-size:13px; color:var(--text-muted);">
+              All text news from official university portals, notification boards, and newspapers is collected throughout the day.<br>
+              At <strong>7:00 PM IST</strong>, this single multi-story carousel (1 slide per story, with clear headline & brief explanation) is posted.
+            </p>
+          </div>
+          <div>
+            <button class="btn btn-mint" id="btn-post-carousel-now">Publish Carousel Now (Override)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Queued News Stories Preview Grid -->
+      <div class="card">
+        <div class="card-label">
+          <span>Stories Queued for Today's 7:00 PM Carousel</span>
+          <span id="carousel-items-badge" class="tag tag-admission">0 Stories Ready</span>
+        </div>
+        <div id="queued-stories-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-top: 14px;">
+          <div style="color: var(--text-muted); font-size: 14px;">No circulars or news waiting in queue.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: TARGET CHANNELS -->
+    <div class="tab-pane" id="tab-channels">
+      <div class="card" style="margin-bottom: 20px;">
+        <h3 style="font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 6px;">🎯 Monitored Target Instagram Handles (Categories 1 to 4)</h3>
+        <p style="font-size: 13px; color: var(--text-muted);">The autonomous crawler scans these 40 high-authority channels for breaking notices, student circulars, and qualifying viral reels.</p>
+      </div>
+
+      <div class="handles-grid" id="handles-grid-container">
+        <!-- Dynamically rendered -->
+      </div>
+    </div>
+
+    <!-- TAB 5: LIVE LOGS -->
+    <div class="tab-pane" id="tab-logs">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <div style="display:flex; gap:10px; align-items:center;">
+          <span style="font-size:14px; font-weight:600; color:var(--mint);">Real-Time Execution Terminal</span>
+          <span class="dot live"></span>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-surface" id="btn-refresh-logs">Refresh</button>
+          <button class="btn btn-danger" id="btn-clear-logs">Clear Logs</button>
+        </div>
+      </div>
+      <div class="terminal-box" id="terminal-content">
+        <!-- Dynamically injected -->
+      </div>
+    </div>
+
+    <!-- TAB 6: SETTINGS -->
+    <div class="tab-pane" id="tab-settings">
+      <div class="card" style="max-width: 600px; margin-bottom: 24px;">
+        <h3 style="font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 12px;">🔑 Meta Graph API Instagram Credentials</h3>
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 18px;">
+          Update your permanent Instagram Graph API access token. This token will automatically be saved to local <code>.env</code> and synced with your Coolify production container.
+        </p>
+        <form id="token-form">
+          <label style="font-size:12px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:6px;">Instagram Access Token</label>
+          <textarea id="setting-token" class="password-input" rows="4" style="resize:vertical;" placeholder="EAAZ..." required></textarea>
+
+          <label style="font-size:12px; font-weight:600; color:var(--text-muted); display:block; margin-bottom:6px; margin-top:10px;">Instagram Business Account ID</label>
+          <input type="text" id="setting-account-id" class="password-input" placeholder="17841472469002356">
+
+          <button type="submit" class="btn btn-mint" style="width:100%; justify-content:center;">Update & Sync to Coolify</button>
+        </form>
+      </div>
+    </div>
+
   </div>
-
-  <div class="toast" id="toast">Action dispatched</div>
 
   <script>
-    let authToken = localStorage.getItem("hpu_auth_token") || "";
-    let isAgentRunning = true;
-
-    // Enter key support for login
-    document.getElementById("admin-pass").addEventListener("keydown", function(e) {
-      if (e.key === "Enter") handleLogin();
-    });
-
-    async function checkAuthOnLoad() {
-      if (!authToken) {
-        showAuthModal();
-        return;
-      }
-      try {
-        const res = await fetch("/api/auth/check", {
-          headers: { "Authorization": `Bearer ${authToken}` }
-        });
-        const data = await res.json();
-        if (data.authenticated) {
-          hideAuthModal();
-          startDataPolling();
-        } else {
-          showAuthModal();
-        }
-      } catch (err) {
-        showAuthModal();
-      }
-    }
-
-    function showAuthModal() {
-      document.getElementById("auth-overlay").classList.remove("hidden");
-      document.getElementById("admin-pass").focus();
-    }
-
-    function hideAuthModal() {
-      document.getElementById("auth-overlay").classList.add("hidden");
-    }
-
-    async function handleLogin() {
-      const pass = document.getElementById("admin-pass").value;
-      const errBox = document.getElementById("login-error");
-      errBox.innerText = "";
-
-      try {
-        const res = await fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ password: pass })
-        });
-        const data = await res.json();
-        if (data.success && data.token) {
-          authToken = data.token;
-          localStorage.setItem("hpu_auth_token", authToken);
-          hideAuthModal();
-          showToast("Welcome to HPU Pulse Control Center");
-          startDataPolling();
-        } else {
-          errBox.innerText = data.error || "Incorrect password";
-        }
-      } catch (err) {
-        errBox.innerText = "Error connecting to server";
-      }
-    }
-
-    async function handleLogout() {
-      await fetch("/api/auth/logout", { method: "POST" });
-      localStorage.removeItem("hpu_auth_token");
-      authToken = "";
-      location.reload();
-    }
+    // State
+    let authToken = localStorage.getItem('hpu_auth_token') || '';
 
     function showToast(msg) {
-      const toast = document.getElementById("toast");
+      const toast = document.getElementById('toast');
       toast.innerText = msg;
-      toast.classList.add("show");
-      setTimeout(() => toast.classList.remove("show"), 3500);
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3500);
     }
 
-    async function triggerAction(endpoint, successMsg) {
-      try {
-        const res = await fetch(endpoint, {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${authToken}` }
+    // Auth Handling
+    const authOverlay = document.getElementById('auth-overlay');
+    const loginForm = document.getElementById('login-form');
+
+    function checkAuth() {
+      fetch('/api/auth/check')
+        .then(r => r.json())
+        .then(d => {
+          if (d.authenticated) {
+            authOverlay.classList.add('hidden');
+            fetchStatus();
+          } else {
+            authOverlay.classList.remove('hidden');
+          }
+        })
+        .catch(() => {
+          authOverlay.classList.remove('hidden');
         });
-        if (res.status === 401) {
-          showAuthModal();
-          return;
-        }
-        const data = await res.json();
-        showToast(successMsg || data.message || "Executed");
-        fetchStatus();
-      } catch (err) {
-        showToast("Request failed");
-      }
     }
 
-    async function toggleAgent() {
-      if (isAgentRunning) {
-        await triggerAction("/api/stop", "Agent Stopped");
-      } else {
-        await triggerAction("/api/start", "Agent Started");
-      }
-    }
-
-    async function fetchStatus() {
-      if (!authToken) return;
-      try {
-        const res = await fetch("/api/status", {
-          headers: { "Authorization": `Bearer ${authToken}` }
-        });
-        if (res.status === 401) {
-          showAuthModal();
-          return;
-        }
-        const data = await res.json();
-        updateUI(data);
-      } catch (err) {
-        console.error("Status fetch error", err);
-      }
-    }
-
-    function updateUI(data) {
-      isAgentRunning = data.is_running;
-      const statusBadge = document.getElementById("agent-status-badge");
-      const statusText = document.getElementById("status-text");
-      const toggleBtn = document.getElementById("btn-toggle-agent");
-
-      if (data.is_running) {
-        statusBadge.className = "status-badge";
-        statusText.innerText = "24/7 AUTONOMOUS ONLINE";
-        toggleBtn.className = "btn btn-stop";
-        toggleBtn.innerText = "🛑 Stop";
-      } else {
-        statusBadge.className = "status-badge stopped";
-        statusText.innerText = "PAUSED BY ADMIN";
-        toggleBtn.className = "btn btn-start";
-        toggleBtn.innerText = "▶ Start";
-      }
-
-      document.getElementById("metric-uptime").innerText = data.uptime || "0s";
-      document.getElementById("metric-last-action").innerText = data.last_action || "Idle";
-      document.getElementById("metric-indexed").innerText = data.total_indexed || 0;
-      document.getElementById("metric-queued").innerText = data.queued_count || 0;
-      document.getElementById("metric-daily-posts").innerText = `${data.daily_posts_count !== undefined ? data.daily_posts_count : 0} / ${data.max_daily_posts || 2}`;
-      document.getElementById("metric-published").innerText = data.published_count || 0;
-      document.getElementById("metric-replies").innerText = data.replies_count || 0;
-      document.getElementById("queue-count-badge").innerText = data.queued_count || 0;
-
-      // Meta Token status banner
-      const tokenBanner = document.getElementById("meta-token-warning");
-      const tokenDesc = document.getElementById("meta-token-error-desc");
-      if (data.token_status && data.token_status.valid === false) {
-        tokenBanner.style.display = "flex";
-        if (data.token_status.error) {
-          tokenDesc.innerText = `Meta Error: ${data.token_status.error} — Click to update your Instagram Access Token.`;
-        }
-      } else {
-        tokenBanner.style.display = "none";
-      }
-
-      // Render Logs
-      const terminal = document.getElementById("terminal-body");
-      if (data.logs && data.logs.length > 0) {
-        terminal.innerHTML = data.logs.map(l => `
-          <div class="log-line">
-            <span class="log-ts">[${l.timestamp.split(" ")[1]}]</span>
-            <span class="log-level-${l.level}">[${l.level}]</span>
-            <span>${escapeHtml(l.message)}</span>
-          </div>
-        `).join("");
-        terminal.scrollTop = terminal.scrollHeight;
-      }
-
-      // Render Queue
-      const queueList = document.getElementById("queue-list");
-      if (data.queued_items && data.queued_items.length > 0) {
-        queueList.innerHTML = data.queued_items.slice(0, 8).map(q => {
-          const isIG = q.source && q.source.includes('Instagram');
-          const isNews = q.source && q.source.includes('News');
-          const pillClass = isIG ? 'color: #38DF7B; background: rgba(56, 223, 123, 0.15); border: 1px solid rgba(56, 223, 123, 0.3);' : (isNews ? 'color: #38BDF8; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3);' : 'color: #F59E0B; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3);');
-          const pillText = isIG ? 'IG Priority' : (isNews ? 'Newspaper' : 'Official');
-          return `
-            <div class="queue-item">
-              <span class="queue-cat">${escapeHtml(q.category)}</span>
-              <span style="font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px; ${pillClass}">${pillText}</span>
-              <span class="queue-title" title="${escapeHtml(q.title)}">${escapeHtml(q.title)}</span>
-            </div>
-          `;
-        }).join("");
-      } else {
-        queueList.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">No items waiting in batch queue.</div>';
-      }
-
-      // Render History
-      const histList = document.getElementById("history-list");
-      if (data.recent_posts && data.recent_posts.length > 0) {
-        histList.innerHTML = data.recent_posts.slice(0, 5).map(p => `
-          <div class="history-item">
-            <div>
-              <div style="font-weight: 700; font-size: 13px;">${escapeHtml(p.headline)}</div>
-              <div style="font-size: 11px; color: var(--text-muted);">${p.post_type} • ${p.published_at}</div>
-            </div>
-            ${p.url !== '#' ? `<a href="${p.url}" target="_blank" class="history-link">View IG ↗</a>` : '<span style="font-size: 11px; color: var(--text-muted);">Dry Run</span>'}
-          </div>
-        `).join("");
-      } else {
-        histList.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">No posts published yet.</div>';
-      }
-    }
-
-    function escapeHtml(str) {
-      if (!str) return "";
-      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    }
-
-    function startDataPolling() {
-      fetchStatus();
-      setInterval(fetchStatus, 3000);
-    }
-
-    function openTokenModal() {
-      document.getElementById("token-modal").style.display = "flex";
-      document.getElementById("modal-token-input").focus();
-    }
-    function closeTokenModal() {
-      document.getElementById("token-modal").style.display = "none";
-    }
-    async function submitNewToken() {
-      const val = document.getElementById("modal-token-input").value.trim();
-      if (!val) {
-        showToast("Please paste a valid token!");
-        return;
-      }
-      try {
-        const res = await fetch("/api/settings/update-instagram-token", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${authToken}`
-          },
-          body: JSON.stringify({ token: val })
-        });
-        const d = await res.json();
+    loginForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const pwd = document.getElementById('login-password').value;
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pwd })
+      })
+      .then(r => r.json())
+      .then(d => {
         if (d.success) {
-          showToast("Token updated & active!");
-          closeTokenModal();
+          authToken = d.token;
+          localStorage.setItem('hpu_auth_token', d.token);
+          authOverlay.classList.add('hidden');
+          showToast('Authenticated successfully!');
           fetchStatus();
         } else {
-          showToast(d.error || "Update failed");
+          alert('Invalid admin password');
         }
-      } catch (err) {
-        showToast("Token update failed");
+      });
+    });
+
+    document.getElementById('btn-logout').addEventListener('click', () => {
+      fetch('/api/auth/logout', { method: 'POST' }).then(() => {
+        localStorage.removeItem('hpu_auth_token');
+        location.reload();
+      });
+    });
+
+    // Tab Navigation
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        const targetId = btn.getAttribute('data-tab');
+        document.getElementById(targetId).classList.add('active');
+      });
+    });
+
+    // Fetch Status & Metrics
+    function fetchStatus() {
+      fetch('/api/status')
+        .then(r => {
+          if (r.status === 401) {
+            authOverlay.classList.remove('hidden');
+            throw new Error('Unauthorized');
+          }
+          return r.json();
+        })
+        .then(d => {
+          updateDashboardUI(d);
+        })
+        .catch(err => {
+          console.error(err);
+        });
+    }
+
+    function updateDashboardUI(data) {
+      // Agent Status
+      const statusDot = document.getElementById('agent-status-dot');
+      const statusText = document.getElementById('agent-status-text');
+      const toggleText = document.getElementById('agent-toggle-text');
+      if (data.is_running) {
+        statusDot.className = 'dot live';
+        statusText.innerText = 'Agent Active (24/7)';
+        toggleText.innerText = 'Pause Scheduler';
+      } else {
+        statusDot.className = 'dot warn';
+        statusText.innerText = 'Agent Paused';
+        toggleText.innerText = 'Resume Scheduler';
+      }
+
+      // Token Status
+      const tokenPill = document.getElementById('token-status-pill');
+      if (data.token_status && data.token_status.valid) {
+        tokenPill.style.color = 'var(--mint)';
+        tokenPill.innerText = `Valid (${data.token_status.name || '@hpu.pulse'})`;
+      } else {
+        tokenPill.style.color = 'var(--danger)';
+        tokenPill.innerText = 'Token Expired/Invalid';
+      }
+
+      // Overview Metrics
+      const reelsCount = data.daily_curated_count || 0;
+      const maxReels = data.max_daily_reels || 15;
+      document.getElementById('overview-reels-count').innerText = reelsCount;
+      document.getElementById('badge-reels-today').innerText = `${reelsCount}/${maxReels}`;
+      document.getElementById('reels-quota-display').innerText = `${reelsCount} / ${maxReels}`;
+
+      const pct = Math.min(100, Math.round((reelsCount / maxReels) * 100));
+      document.getElementById('reels-progress-fill').style.width = `${pct}%`;
+
+      const pendingReels = data.pending_curated_reels || [];
+      const tomorrowReels = pendingReels.filter(r => r.status === 'QUEUED_FOR_NEXT_DAY');
+      document.getElementById('overview-reels-rollover').innerText = `${tomorrowReels.length} queued for next day (${maxReels - reelsCount} quota left today)`;
+
+      // 7 PM News
+      const queuedNewsCount = data.today_queued_news_count || 0;
+      document.getElementById('overview-news-queued').innerText = queuedNewsCount;
+      document.getElementById('badge-news-count').innerText = queuedNewsCount;
+      document.getElementById('carousel-items-badge').innerText = `${queuedNewsCount} Stories Ready`;
+
+      const carouselStatus = document.getElementById('carousel-today-status');
+      const carouselPill = document.getElementById('carousel-status-pill');
+      if (data.carousel_published_today) {
+        carouselStatus.innerText = 'Status: ✅ Today\'s 7 PM Roundup Carousel has been published!';
+        carouselPill.className = 'tag tag-result';
+        carouselPill.innerText = 'Published Today';
+      } else {
+        carouselStatus.innerText = 'Status: Waiting for 7:00 PM IST automated schedule';
+        carouselPill.className = 'tag tag-general';
+        carouselPill.innerText = 'Scheduled 19:00';
+      }
+
+      // Indexed & Published
+      document.getElementById('overview-indexed-count').innerText = data.total_indexed || 0;
+      document.getElementById('overview-published-count').innerText = data.published_count || 0;
+      document.getElementById('overview-uptime').innerText = `Uptime: ${data.uptime || '0m'}`;
+
+      // Next Jobs
+      const nextJobsList = document.getElementById('next-jobs-list');
+      if (data.next_jobs && data.next_jobs.length) {
+        nextJobsList.innerHTML = data.next_jobs.map(j => `
+          <div style="background:var(--surface-card); border:1px solid var(--border); border-radius:10px; padding:8px 14px; font-size:12px;">
+            <strong style="color:var(--mint);">${j.name}</strong> • <span style="color:var(--text-muted);">${j.next_run}</span>
+          </div>
+        `).join('');
+      } else {
+        nextJobsList.innerHTML = '<span style="color:var(--text-muted); font-size:12px;">No active background jobs scheduled.</span>';
+      }
+
+      // Recent Posts Table
+      const postsTbody = document.getElementById('recent-posts-tbody');
+      if (data.recent_posts && data.recent_posts.length) {
+        postsTbody.innerHTML = data.recent_posts.map(p => `
+          <tr>
+            <td><span class="tag tag-general">${p.post_type}</span></td>
+            <td><strong>${escapeHtml(p.headline)}</strong></td>
+            <td><span class="tag tag-admission">${p.category}</span></td>
+            <td style="color:var(--text-muted); font-size:12px;">${p.published_at}</td>
+            <td>${p.url && p.url !== '#' ? `<a href="${p.url}" target="_blank" style="color:var(--mint); text-decoration:none; font-weight:600;">View on IG ↗</a>` : '<span style="color:var(--text-dim)">Local</span>'}</td>
+          </tr>
+        `).join('');
+      } else {
+        postsTbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No posts recorded yet.</td></tr>';
+      }
+
+      // Published Curated Reels
+      const pubReelsTbody = document.getElementById('published-reels-tbody');
+      const pubReels = data.published_curated_reels || [];
+      if (pubReels.length) {
+        pubReelsTbody.innerHTML = pubReels.map(r => `
+          <tr>
+            <td>
+              <a href="https://www.instagram.com/${r.uploader_handle}/" target="_blank" style="color:var(--mint); font-weight:700; text-decoration:none;">
+                @${r.uploader_handle}
+              </a>
+            </td>
+            <td>
+              <span style="color:var(--info);">👁️ ${(r.view_count || 0).toLocaleString()}</span> &nbsp;
+              <span style="color:#F472B6;">❤️ ${(r.like_count || 0).toLocaleString()}</span> &nbsp;
+              <span style="color:var(--mint);">💬 ${(r.comment_count || 0).toLocaleString()}</span>
+            </td>
+            <td style="color:var(--text-muted); font-size:12px;">${r.published_at || 'Just now'}</td>
+            <td><a href="${r.instagram_url}" target="_blank" style="color:#fff; text-decoration:none;">Original Reel ↗</a></td>
+            <td>
+              ${r.instagram_media_id && !r.instagram_media_id.startsWith('dry_run') ?
+                `<a href="https://www.instagram.com/p/${r.instagram_media_id}/" target="_blank" style="color:var(--mint); font-weight:700; text-decoration:none;">View on @hpu.pulse ↗</a>` :
+                '<span style="color:var(--text-dim)">Posted Locally</span>'
+              }
+            </td>
+          </tr>
+        `).join('');
+      } else {
+        pubReelsTbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No curated reels published yet.</td></tr>';
+      }
+
+      // Pending Curated Reels
+      const pendingTbody = document.getElementById('pending-reels-tbody');
+      document.getElementById('pending-reels-count-badge').innerText = `${pendingReels.length} Waiting`;
+      if (pendingReels.length) {
+        pendingTbody.innerHTML = pendingReels.map(r => `
+          <tr>
+            <td>
+              <a href="https://www.instagram.com/${r.uploader_handle}/" target="_blank" style="color:var(--mint); font-weight:700; text-decoration:none;">
+                @${r.uploader_handle}
+              </a>
+            </td>
+            <td>
+              <span style="color:var(--info);">👁️ ${(r.view_count || 0).toLocaleString()}</span> &nbsp;
+              <span style="color:#F472B6;">❤️ ${(r.like_count || 0).toLocaleString()}</span> &nbsp;
+              <span style="color:var(--mint);">💬 ${(r.comment_count || 0).toLocaleString()}</span>
+            </td>
+            <td>${r.target_post_date || 'Today'}</td>
+            <td>
+              <span class="tag ${r.status === 'QUEUED_FOR_NEXT_DAY' ? 'tag-exam' : 'tag-general'}">
+                ${r.status === 'QUEUED_FOR_NEXT_DAY' ? 'Rollover (Tomorrow)' : 'Ready Today'}
+              </span>
+            </td>
+            <td><a href="${r.instagram_url}" target="_blank" style="color:#fff; text-decoration:none;">View ↗</a></td>
+            <td>
+              <button class="btn btn-danger" style="padding:4px 10px; font-size:11px;" onclick="skipReel(${r.id})">Skip</button>
+            </td>
+          </tr>
+        `).join('');
+      } else {
+        pendingTbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">Queue is empty. Click "Scan Target Reels" to discover fresh content.</td></tr>';
+      }
+
+      // Queued News Carousel Grid
+      const newsGrid = document.getElementById('queued-stories-grid');
+      const newsItems = data.today_queued_news_items || [];
+      if (newsItems.length) {
+        newsGrid.innerHTML = newsItems.map((item, idx) => `
+          <div class="card" style="background:var(--surface-elevated); border:1px solid rgba(56, 223, 123, 0.2);">
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+              <span class="tag tag-${(item.category || 'general').toLowerCase()}">${item.category || 'GENERAL'}</span>
+              <span style="font-size:11px; color:var(--text-dim);">Slide ${idx + 1} of ${newsItems.length}</span>
+            </div>
+            <h4 style="font-size:14px; font-weight:700; color:#fff; margin-bottom:8px; line-height:1.4;">${escapeHtml(item.title)}</h4>
+            <p style="font-size:12px; color:var(--text-muted); line-height:1.5;">${escapeHtml((item.summary || item.raw_text || '').substring(0, 140))}...</p>
+            <div style="margin-top:12px; font-size:11px; color:var(--text-dim); border-top:1px solid rgba(255,255,255,0.06); padding-top:8px;">
+              📰 Source: ${escapeHtml(item.source || 'Portal')}
+            </div>
+          </div>
+        `).join('');
+      } else {
+        newsGrid.innerHTML = '<div style="color:var(--text-muted); font-size:14px;">No circulars or news waiting in queue. Crawlers run every 60 minutes.</div>';
+      }
+
+      // Monitored Handles Grid
+      const handlesContainer = document.getElementById('handles-grid-container');
+      const handles = data.monitored_handles || [];
+      if (handles.length && handlesContainer.children.length === 0) {
+        handlesContainer.innerHTML = handles.map(h => `
+          <div class="handle-card">
+            <a href="https://www.instagram.com/${h}/" target="_blank" class="handle-link">
+              <span>📸</span> @${h}
+            </a>
+            <span class="tag tag-general" style="font-size:10px;">Monitoring</span>
+          </div>
+        `).join('');
+      }
+
+      // Terminal Logs
+      const terminal = document.getElementById('terminal-content');
+      if (data.logs && data.logs.length) {
+        terminal.innerHTML = data.logs.map(l => `
+          <div class="log-line">
+            <span class="log-time">[${l.timestamp}]</span>
+            <span class="log-level-${l.level}">[${l.level}]</span>
+            <span class="log-msg">${escapeHtml(l.message)}</span>
+          </div>
+        `).join('');
+        terminal.scrollTop = terminal.scrollHeight;
       }
     }
 
-    // Init
-    checkAuthOnLoad();
-  </script>
+    function escapeHtml(text) {
+      if (!text) return '';
+      return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
 
-  <!-- Token Update Modal -->
-  <div id="token-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(6,11,14,0.92); backdrop-filter: blur(12px); z-index: 99999; align-items: center; justify-content: center; padding: 20px;">
-    <div style="background: var(--surface-elevated); border: 1px solid var(--border); border-radius: 20px; padding: 32px; max-width: 540px; width: 100%; box-shadow: 0 20px 50px rgba(0,0,0,0.7);">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <h3 style="font-size: 20px; font-weight: 700;">🔑 Update Meta Instagram Token</h3>
-        <button onclick="closeTokenModal()" style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
-      </div>
-      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5;">
-        Paste your freshly generated 60-day or system user access token from the Meta Graph API Explorer. This will immediately update the running agent and persist to Coolify.
-      </p>
-      <div style="margin-bottom: 16px;">
-        <label style="display: block; font-size: 12px; font-weight: 600; color: var(--mint); margin-bottom: 6px;">INSTAGRAM ACCESS TOKEN</label>
-        <textarea id="modal-token-input" rows="4" style="width: 100%; padding: 12px; background: rgba(6,11,14,0.8); border: 1px solid var(--border); border-radius: 10px; color: #FFF; font-family: 'JetBrains Mono', monospace; font-size: 12px; resize: vertical;" placeholder="Paste EAA... token here"></textarea>
-      </div>
-      <div style="display: flex; justify-content: flex-end; gap: 12px;">
-        <button onclick="closeTokenModal()" class="btn" style="background: rgba(255,255,255,0.08); color: var(--text-muted);">Cancel</button>
-        <button onclick="submitNewToken()" class="btn btn-start" style="padding: 10px 22px;">Save & Apply Token</button>
-      </div>
-    </div>
-  </div>
+    // Skip Reel Action
+    window.skipReel = function(reelId) {
+      if (!confirm(`Skip and remove reel #${reelId} from queue?`)) return;
+      fetch(`/api/reels/skip/${reelId}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(() => {
+          showToast(`Reel #${reelId} skipped.`);
+          fetchStatus();
+        });
+    };
+
+    // Action Triggers
+    document.getElementById('btn-crawl-now').addEventListener('click', () => {
+      fetch('/api/crawl-now', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { showToast(d.message); fetchStatus(); });
+    });
+
+    document.getElementById('btn-7pm-now').addEventListener('click', () => {
+      fetch('/api/news-carousel/publish-now', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { showToast(d.message); fetchStatus(); });
+    });
+
+    document.getElementById('btn-post-carousel-now').addEventListener('click', () => {
+      fetch('/api/news-carousel/publish-now', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { showToast(d.message); fetchStatus(); });
+    });
+
+    document.getElementById('btn-scan-reels-now').addEventListener('click', () => {
+      fetch('/api/reels/scan-now', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { showToast(d.message); fetchStatus(); });
+    });
+
+    document.getElementById('btn-post-reel-now').addEventListener('click', () => {
+      fetch('/api/reels/post-next', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { showToast(d.message); fetchStatus(); });
+    });
+
+    document.getElementById('btn-toggle-agent').addEventListener('click', () => {
+      const toggleText = document.getElementById('agent-toggle-text');
+      const action = toggleText.innerText.includes('Pause') ? '/api/stop' : '/api/start';
+      fetch(action, { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { showToast(d.message); fetchStatus(); });
+    });
+
+    document.getElementById('btn-refresh-logs').addEventListener('click', () => {
+      fetchStatus();
+      showToast('Logs refreshed.');
+    });
+
+    document.getElementById('btn-clear-logs').addEventListener('click', () => {
+      fetch('/api/clear-logs', { method: 'POST' })
+        .then(r => r.json())
+        .then(() => { fetchStatus(); showToast('Logs cleared.'); });
+    });
+
+    // Manual Reel Ingestion Form
+    document.getElementById('manual-reel-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const url = document.getElementById('manual-reel-url').value.trim();
+      const force = document.getElementById('manual-reel-force').checked;
+      showToast('Analyzing reel metadata...');
+      fetch('/api/reels/manual-add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, force })
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          showToast(`Reel @${d.reel.uploader_handle} enqueued successfully!`);
+          document.getElementById('manual-reel-url').value = '';
+          fetchStatus();
+        } else {
+          alert('Could not enqueue reel: ' + (d.error || 'Unknown error'));
+        }
+      });
+    });
+
+    // Credentials Form
+    document.getElementById('token-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const token = document.getElementById('setting-token').value.trim();
+      const accountId = document.getElementById('setting-account-id').value.trim();
+      showToast('Updating token and syncing with Coolify...');
+      fetch('/api/settings/update-instagram-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, account_id: accountId })
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          showToast('Instagram credentials updated and active!');
+          fetchStatus();
+        } else {
+          alert('Error updating credentials: ' + (d.error || 'Failed'));
+        }
+      });
+    });
+
+    // Initialization & Polling
+    checkAuth();
+    setInterval(fetchStatus, 5000);
+  </script>
 </body>
 </html>

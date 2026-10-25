@@ -1,6 +1,7 @@
 import os
 import re
 import uuid
+from datetime import datetime
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from .config import OUTPUT_DIR, INSTAGRAM_HANDLE
@@ -617,5 +618,141 @@ def render_carousel_slides(carousel_data: dict) -> list:
         slide_file = OUTPUT_DIR / f"slide_{uuid.uuid4().hex[:8]}_{idx}.png"
         canvas.save(str(slide_file), "PNG", quality=95)
         slide_paths.append(str(slide_file))
+
+    return slide_paths
+
+def render_daily_roundup_carousel(news_items: list) -> list:
+    """
+    Renders the Single Daily News Roundup Carousel (posted at 7:00 PM IST).
+    Each slide represents one news story:
+    - Bold, clear headline
+    - Inset card with brief bullet-point explanation that fits cleanly
+    - Official HPU crest header + Category badge pill
+    - Source & date attribution in footer
+    Meta Graph API hard limit: 2 to 10 images.
+    """
+    if not news_items:
+        return []
+
+    # Meta Graph API accepts max 10 images per carousel
+    items_to_render = news_items[:10]
+    total = len(items_to_render)
+
+    # If only 1 item, duplicate into 2 slides (Overview + Key Actionables) since carousel requires >= 2
+    if total == 1:
+        it = items_to_render[0]
+        items_to_render = [it, it]
+        total = 2
+
+    slide_paths = []
+
+    for idx, item in enumerate(items_to_render, start=1):
+        title = clean_display_text(item.get("title", "HPU University Update"))
+        summary = clean_display_text(item.get("summary") or item.get("raw_text") or "")
+        category = (item.get("category") or "GENERAL").upper()
+        source = clean_display_text(item.get("source") or "HPU Portal")
+        notice_date = clean_display_text(item.get("notice_date") or datetime.now().strftime("%d %b %Y"))
+
+        is_hi = is_hindi_text(f"{title} {summary}")
+
+        badge_key = "GENERAL"
+        for cat, kws in BADGE_KEYWORDS.items():
+            if any(kw in category for kw in kws):
+                badge_key = cat
+                break
+
+        canvas = create_base_canvas(badge_key)
+        draw = ImageDraw.Draw(canvas)
+
+        # 1. Header
+        badge_text = category
+        draw_official_header(canvas, badge_text, is_hindi=is_hi, slide_num=idx, total_slides=total)
+
+        # 2. Headline
+        h_font = get_font("bold", 42, is_hindi=is_hi)
+        max_h_width = WIDTH - 160
+        h_lines = wrap_text(title, h_font, max_h_width, draw)
+        
+        # Limit headline lines to max 3
+        if len(h_lines) > 3:
+            h_lines = h_lines[:3]
+            if not h_lines[-1].endswith("..."):
+                h_lines[-1] = h_lines[-1][:max(10, len(h_lines[-1]) - 3)] + "..."
+
+        hy = 230
+        for hl in h_lines:
+            draw.text((80, hy), hl, fill=THEME["primary"], font=h_font)
+            hy += 52
+
+        # 3. Divider line
+        hy += 12
+        draw.line([(80, hy), (WIDTH - 80, hy)], fill=THEME["card_border"], width=2)
+        hy += 20
+
+        # 4. Inset Briefing Panel
+        box_top = hy
+        box_bottom = HEIGHT - 155
+        draw.rounded_rectangle(
+            [65, box_top, WIDTH - 65, box_bottom],
+            radius=18,
+            fill=THEME["card_bg"],
+            outline=THEME["card_border"],
+            width=2
+        )
+
+        # Section Subtitle inside card
+        sub_title = "संक्षिप्त विवरण एवं मुख्य बिंदु" if is_hi else "Key Highlights & Briefing"
+        st_font = get_font("bold", 24, is_hindi=is_hi)
+        draw.text((95, box_top + 28), sub_title, fill=THEME["muted"], font=st_font)
+        draw.ellipse([80, box_top + 36, 88, box_top + 44], fill=THEME["corner_accent"])
+
+        # Extract/split summary into brief bullet points
+        points = []
+        if summary:
+            raw_pts = [p.strip() for p in re.split(r'[।.\n|]', summary) if len(p.strip()) > 15]
+            points = raw_pts[:4]
+        if not points:
+            if is_hi:
+                points = [
+                    "विश्वविद्यालय द्वारा इस संबंध में विस्तृत अधिसूचना जारी की गई है।",
+                    "छात्र अपने लॉगिन पोर्टल पर जाकर पूरी जानकारी देख सकते हैं।",
+                    "संबंधित विभाग से अधिक जानकारी प्राप्त की जा सकती है।"
+                ]
+            else:
+                points = [
+                    "Detailed official notification published on university portal.",
+                    "Students can log into their portal accounts to check further guidelines.",
+                    "Contact the concerned department or examination branch for assistance."
+                ]
+
+        p_font = get_font("medium", 28, is_hindi=is_hi)
+        py = box_top + 80
+        max_p_width = WIDTH - 240
+        bullet_col = BADGE_COLORS.get(badge_key, BADGE_COLORS["GENERAL"])["bullet"]
+
+        for pt in points[:4]:
+            wrapped_pt = wrap_text(pt, p_font, max_p_width, draw)
+            for line_i, line in enumerate(wrapped_pt):
+                if py > box_bottom - 70:
+                    break
+                if line_i == 0:
+                    draw.ellipse([92, py + 10, 104, py + 22], fill=bullet_col)
+                    draw.text((120, py), line, fill=THEME["body"], font=p_font)
+                else:
+                    draw.text((120, py), line, fill=THEME["body"], font=p_font)
+                py += 44
+            py += 18
+
+        # Inset source & date attribution badge at the bottom of the card
+        src_tag = f"स्रोत: {source} • {notice_date}" if is_hi else f"Source: {source} • {notice_date}"
+        src_font = get_font("semibold", 18, is_hindi=is_hi)
+        draw.text((95, box_bottom - 42), src_tag, fill=THEME["dim"], font=src_font)
+
+        # 5. Footer
+        draw_official_footer(draw, is_cover=False, is_hindi=is_hi)
+
+        out_slide = OUTPUT_DIR / f"daily_news_{uuid.uuid4().hex[:8]}_{idx}.png"
+        canvas.save(str(out_slide), "PNG", quality=95)
+        slide_paths.append(str(out_slide))
 
     return slide_paths

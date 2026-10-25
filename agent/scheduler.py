@@ -3,34 +3,52 @@ import argparse
 from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 
-if sys.stdout.encoding != 'utf-8':
+if getattr(sys.stdout, 'encoding', None) != 'utf-8':
     try:
-        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     except Exception:
         pass
 
-from .config import CRAWL_INTERVAL_MINUTES, ROUTINE_BATCH_INTERVAL_HOURS, TIMEZONE
+from .config import CRAWL_INTERVAL_MINUTES, TIMEZONE, MAX_DAILY_REEL_UPLOADS
 from .agent import (
-    run_automated_check_and_post_cycle,
-    publish_breaking_reel_cycle,
-    publish_routine_carousel_cycle
+    run_automated_crawler_cycle,
+    publish_daily_7pm_news_carousel,
+    run_curated_reels_scanner_cycle,
+    publish_next_curated_reel_cycle,
+    publish_breaking_reel_cycle
 )
 from .auto_commenter import process_comments
 
 def scheduled_crawler_job():
-    print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⏰ Scheduled 30-Minute Crawler Fired!")
+    print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⏰ Scheduled Multi-Source Crawler Fired!")
     try:
-        run_automated_check_and_post_cycle(dry_run=False)
+        run_automated_crawler_cycle()
     except Exception as e:
         print(f"❌ Error during scheduled crawl: {e}")
 
-def scheduled_batch_carousel_job():
-    print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⏰ Scheduled Batch Carousel Job Fired!")
+def scheduled_daily_7pm_carousel_job():
+    print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ⏰ Scheduled 7:00 PM Daily News Carousel Fired!")
     try:
-        publish_routine_carousel_cycle(dry_run=False)
+        publish_daily_7pm_news_carousel(dry_run=False, is_manual=False)
     except Exception as e:
-        print(f"❌ Error during carousel batching: {e}")
+        print(f"❌ Error during 7 PM daily carousel publish: {e}")
+
+def scheduled_reels_scanner_job():
+    print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 🔍 Scheduled Target Handles Reels Scanner Fired!")
+    try:
+        run_curated_reels_scanner_cycle()
+    except Exception as e:
+        print(f"❌ Error during reels scanning: {e}")
+
+def scheduled_reels_publisher_job():
+    print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 🎬 Scheduled Curated Reels Publisher Fired (Max 15/day quota)!")
+    try:
+        publish_next_curated_reel_cycle(dry_run=False, max_to_post=1)
+    except Exception as e:
+        print(f"❌ Error during curated reels publishing: {e}")
 
 def scheduled_comment_job():
     try:
@@ -42,35 +60,51 @@ def start_scheduler(crawl_immediately: bool = False):
     scheduler = BlockingScheduler(timezone=TIMEZONE)
 
     print("==================================================================")
-    print("   🏛 HIMACHAL PRADESH UNIVERSITY — AUTONOMOUS NEWS AGENT 🏛")
+    print("   🏛 HIMACHAL PRADESH UNIVERSITY — AUTONOMOUS PULSE AGENT 🏛")
     print(f"   Timezone: {TIMEZONE}")
-    print(f"   Multi-Source Crawler: Runs every {CRAWL_INTERVAL_MINUTES} minutes")
-    print(f"   Tier 1 Breaking Reel: Publishes IMMEDIATELY on detection")
-    print(f"   Tier 2 Routine Carousel: Batches every {ROUTINE_BATCH_INTERVAL_HOURS} hours")
+    print(f"   Multi-Source Crawler: Runs every 60 minutes")
+    print(f"   Daily News Carousel: Exactly 1 per day, published at 7:00 PM IST")
+    print(f"   Curated Reels: 40 monitored handles, engagement filtered, max {MAX_DAILY_REEL_UPLOADS}/day")
     print("   Auto-Comment Responder: Active every 30 minutes")
     print("==================================================================")
 
-    # 1. 30-Minute Portal & News Crawler (also triggers immediate Tier 1 Reels)
+    # 1. 60-Minute Portal & Newspaper Crawler
     scheduler.add_job(
         scheduled_crawler_job,
-        trigger=IntervalTrigger(minutes=CRAWL_INTERVAL_MINUTES, timezone=TIMEZONE),
+        trigger=IntervalTrigger(minutes=60, timezone=TIMEZONE),
         id="job_hpu_crawler",
-        name="30-Minute HPU News Crawler",
-        misfire_grace_time=120
+        name="60-Minute HPU News Crawler",
+        misfire_grace_time=180
     )
-    print(f"  🕷 Crawler: Active every {CRAWL_INTERVAL_MINUTES} minutes")
 
-    # 2. Batch Carousel Worker
+    # 2. Daily 7:00 PM News Carousel Job (Single Carousel Per Day)
     scheduler.add_job(
-        scheduled_batch_carousel_job,
-        trigger=IntervalTrigger(hours=ROUTINE_BATCH_INTERVAL_HOURS, timezone=TIMEZONE),
-        id="job_carousel_batcher",
-        name="Routine Carousel Batcher",
+        scheduled_daily_7pm_carousel_job,
+        trigger=CronTrigger(hour=19, minute=0, timezone=TIMEZONE),
+        id="job_daily_7pm_carousel",
+        name="Daily 7:00 PM News Carousel",
+        misfire_grace_time=600
+    )
+
+    # 3. Curated Reels Scanner (Scans Categories 1 to 4 every 90 minutes)
+    scheduler.add_job(
+        scheduled_reels_scanner_job,
+        trigger=IntervalTrigger(minutes=90, timezone=TIMEZONE),
+        id="job_reels_scanner",
+        name="90-Minute Curated Reels Scanner",
         misfire_grace_time=300
     )
-    print(f"  📚 Routine Carousel Batcher: Active every {ROUTINE_BATCH_INTERVAL_HOURS} hours")
 
-    # 3. Comment Auto-Responder
+    # 4. Curated Reels Publisher (Paced every 45 minutes between 9 AM and 10 PM)
+    scheduler.add_job(
+        scheduled_reels_publisher_job,
+        trigger=CronTrigger(hour="9-22", minute="15,45", timezone=TIMEZONE),
+        id="job_reels_publisher",
+        name=f"Curated Reels Publisher (Max {MAX_DAILY_REEL_UPLOADS}/day)",
+        misfire_grace_time=300
+    )
+
+    # 5. Comment Auto-Responder
     scheduler.add_job(
         scheduled_comment_job,
         trigger=IntervalTrigger(minutes=30, timezone=TIMEZONE),
@@ -78,16 +112,16 @@ def start_scheduler(crawl_immediately: bool = False):
         name="Auto Comment Responder",
         misfire_grace_time=60
     )
-    print("  💬 Auto-Comment Responder: Active every 30 minutes")
 
     if crawl_immediately:
         print("\n🚀 Executing initial crawl immediately upon startup...")
         scheduled_crawler_job()
 
-    print("\n⚡ Autonomous HPU News Agent is running in the background. Press Ctrl+C to stop.")
+    print("\n⚡ Autonomous HPU Pulse Agent is running in the background. Press Ctrl+C to stop.")
     try:
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
+        print("\n🛑 Scheduler stopped by user.")
         print("\n🛑 Scheduler stopped by user.")
 
 if __name__ == "__main__":

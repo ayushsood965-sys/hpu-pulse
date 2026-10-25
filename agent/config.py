@@ -41,3 +41,34 @@ MAX_DAILY_POSTS = int(os.getenv("MAX_DAILY_POSTS", "2"))
 ROUTINE_BATCH_INTERVAL_HOURS = float(os.getenv("ROUTINE_BATCH_INTERVAL_HOURS", "12"))
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Kolkata")
 DB_PATH = BASE_DIR / "agent_data.db"
+
+# Curated Reels Directory & Pipeline Settings
+CURATED_REELS_DIR = OUTPUT_DIR / "curated_reels"
+CURATED_REELS_DIR.mkdir(parents=True, exist_ok=True)
+
+MAX_DAILY_REEL_UPLOADS = int(os.getenv("MAX_DAILY_REEL_UPLOADS", "15"))
+REELS_DATE_CUTOFF = os.getenv("REELS_DATE_CUTOFF", "2026-10-25")
+DAILY_CAROUSEL_TIME = os.getenv("DAILY_CAROUSEL_TIME", "19:00")
+
+# Target Instagram Handles for Reels Curation (Categories 1 to 4)
+TARGET_REEL_HANDLES = [
+    # Category 1: News, Circulars & Exam Alert Pages
+    "hpuupdate", "hpudailyupdates", "hpushimla_official", "hpu_shimla_",
+    "himachal_pradesh_university", "hpuexamupdates", "hpu_bulletin",
+    "hpu_alerts", "hpu_hub", "scholarhubhpu",
+
+    # Category 2: Student Organizations & Political Wings
+    "abvp_hpu_unit", "abvp4hpu", "sfihpu", "sfihpu_shimla",
+    "nsui.hpu.shimla", "nsui_hpu_official", "scahpu", "abvp_summerhill",
+    "sfi_summerhill", "hpu_student_union",
+
+    # Category 3: Departmental & Professional Wings
+    "uit_hpu", "uit_shimla", "uils_hpu", "uils_shimla",
+    "hpubs_shimla", "hpulawdept", "hpu_journalism", "hpu_biotech",
+    "hpu_sports", "hpurc_dharamshala",
+
+    # Category 4: Campus Life, Culture & Video Reels Creators
+    "hpu_diaries", "hpushimladiaries", "summerhill_diaries", "hpu_vibes",
+    "hpu_talks", "hpu_buzz", "hpu_confessions", "hpu_memes",
+    "hpu_youth_festival", "summerhill_shimla"
+]

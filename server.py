@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 
 from agent.config import (
     OUTPUT_DIR,
@@ -27,6 +28,10 @@ from agent.config import (
     CRAWL_INTERVAL_MINUTES,
     POST_INTERVAL_HOURS,
     MAX_DAILY_POSTS,
+    MAX_DAILY_REEL_UPLOADS,
+    REELS_DATE_CUTOFF,
+    DAILY_CAROUSEL_TIME,
+    TARGET_REEL_HANDLES,
     ROUTINE_BATCH_INTERVAL_HOURS,
     TIMEZONE,
     DB_PATH,
@@ -37,12 +42,27 @@ from agent.scrapers import run_crawler_pipeline
 from agent.agent import (
     publish_breaking_reel_cycle,
     publish_routine_carousel_cycle,
+    publish_daily_7pm_news_carousel,
+    run_curated_reels_scanner_cycle,
+    publish_next_curated_reel_cycle,
     run_automated_crawler_cycle,
     execute_scheduled_publishing_cycle,
     run_automated_check_and_post_cycle
 )
+from agent.reels_curator import manually_enqueue_reel
 from agent.auto_commenter import process_comments
-from agent.db import init_db, purge_stale_pending_items, get_daily_published_count
+from agent.db import (
+    init_db,
+    purge_stale_pending_items,
+    get_daily_published_count,
+    get_daily_curated_reels_count,
+    get_pending_curated_reels,
+    get_published_curated_reels,
+    skip_curated_reel,
+    get_today_queued_news_count,
+    get_today_queued_news_items,
+    get_daily_news_carousel_published_today
+)
 
 app = FastAPI(title="HPU Pulse — Autonomous Agent Control Center")
 
@@ -104,6 +124,13 @@ class StdoutLogInterceptor:
         except Exception:
             pass
 
+    @property
+    def encoding(self):
+        return getattr(self.original, "encoding", "utf-8")
+
+    def __getattr__(self, name):
+        return getattr(self.original, name)
+
 sys.stdout = StdoutLogInterceptor(sys.stdout, default_level="INFO")
 sys.stderr = StdoutLogInterceptor(sys.stderr, default_level="ERROR")
 
@@ -144,17 +171,28 @@ def safe_scheduled_post_cycle(dry_run: bool = False, is_manual: bool = False):
     except Exception as e:
         log_event(f"❌ Post Cycle Failed: {e}", level="ERROR")
 
-def safe_carousel_cycle(items=None, category=None, dry_run=False, is_manual=True):
+def safe_daily_7pm_carousel_cycle(dry_run=False, is_manual=False):
     try:
-        publish_routine_carousel_cycle(items=items, category=category, dry_run=dry_run, is_manual=is_manual)
+        res = publish_daily_7pm_news_carousel(dry_run=dry_run, is_manual=is_manual)
+        if res:
+            log_event(f"📰 Daily 7 PM News Carousel Published ({res.get('slides_count')} slides, Media ID: {res.get('media_id')}).")
     except Exception as e:
-        log_event(f"❌ Routine Carousel Publish Failed: {e}", level="ERROR")
+        log_event(f"❌ Daily 7 PM News Carousel Publish Failed: {e}", level="ERROR")
 
-def safe_reel_cycle(item=None, dry_run=False, is_manual=True):
+def safe_reels_scan_cycle():
     try:
-        publish_breaking_reel_cycle(item=item, dry_run=dry_run, is_manual=is_manual)
+        count = run_curated_reels_scanner_cycle()
+        log_event(f"🔍 Curated Reels Scan Finished: {count} new qualified reel(s) enqueued.")
     except Exception as e:
-        log_event(f"❌ Video Reel Publish Failed: {e}", level="ERROR")
+        log_event(f"❌ Curated Reels Scan Failed: {e}", level="ERROR")
+
+def safe_reels_post_cycle(dry_run=False, max_to_post=1):
+    try:
+        posted = publish_next_curated_reel_cycle(dry_run=dry_run, max_to_post=max_to_post)
+        if posted:
+            log_event(f"🎬 Curated Reel Published to @hpu.pulse ({posted} reel posted, daily quota updated).")
+    except Exception as e:
+        log_event(f"❌ Curated Reel Publish Failed: {e}", level="ERROR")
 
 def safe_comments_cycle():
     try:
@@ -175,25 +213,43 @@ class AgentManager:
 
         self.scheduler = BackgroundScheduler(timezone=TIMEZONE)
 
-        # 1. Multi-source crawler every 6 hours
+        # 1. Multi-source crawler every 60 minutes
         self.scheduler.add_job(
             safe_crawl_cycle,
-            trigger=IntervalTrigger(hours=CRAWL_INTERVAL_HOURS, timezone=TIMEZONE),
+            trigger=IntervalTrigger(minutes=60, timezone=TIMEZONE),
             id="job_crawl_check",
-            name=f"Multi-Source Crawler (Every {CRAWL_INTERVAL_HOURS}h)",
+            name="Multi-Source Crawler (Every 60m)",
             misfire_grace_time=300
         )
 
-        # 2. 12-Hour Scheduled Post Worker (Max 2 posts daily: 1-2 Reel, 3+ Carousel)
+        # 2. Daily 7:00 PM News Carousel Job (Single Carousel Per Day)
         self.scheduler.add_job(
-            safe_scheduled_post_cycle,
-            trigger=IntervalTrigger(hours=POST_INTERVAL_HOURS, timezone=TIMEZONE),
-            id="job_scheduled_post",
-            name=f"12-Hour Post Worker (Max {MAX_DAILY_POSTS}/day)",
+            safe_daily_7pm_carousel_cycle,
+            trigger=CronTrigger(hour=19, minute=0, timezone=TIMEZONE),
+            id="job_daily_7pm_carousel",
+            name="Daily 7:00 PM News Carousel",
+            misfire_grace_time=600
+        )
+
+        # 3. Curated Reels Scanner (Scans 40 target handles every 90 minutes)
+        self.scheduler.add_job(
+            safe_reels_scan_cycle,
+            trigger=IntervalTrigger(minutes=90, timezone=TIMEZONE),
+            id="job_reels_scanner",
+            name="Curated Reels Scanner (Every 90m)",
             misfire_grace_time=300
         )
 
-        # 3. Instagram comment auto-responder
+        # 4. Curated Reels Publisher (Paced every 45 minutes between 9 AM and 10 PM, Max 15/day)
+        self.scheduler.add_job(
+            safe_reels_post_cycle,
+            trigger=CronTrigger(hour="9-22", minute="15,45", timezone=TIMEZONE),
+            id="job_reels_publisher",
+            name=f"Curated Reels Publisher (Max {MAX_DAILY_REEL_UPLOADS}/day)",
+            misfire_grace_time=300
+        )
+
+        # 5. Instagram comment auto-responder
         self.scheduler.add_job(
             safe_comments_cycle,
             trigger=IntervalTrigger(minutes=30, timezone=TIMEZONE),
@@ -205,7 +261,7 @@ class AgentManager:
         self.scheduler.start()
         self.is_running = True
         self.last_action = "Agent Started"
-        log_event(f"✦ 24/7 Autonomous HPU News Agent Started (Crawl every {CRAWL_INTERVAL_HOURS}h | Posts every {POST_INTERVAL_HOURS}h | Max {MAX_DAILY_POSTS} posts daily)")
+        log_event(f"✦ 24/7 Autonomous HPU Pulse Agent Started (Crawler 60m | Daily 7 PM Carousel | Reels 15/day quota | Comments 30m)")
 
     def stop(self):
         if self.scheduler and self.scheduler.running:
@@ -369,6 +425,13 @@ def get_status(request: Request, authorization: Optional[str] = Header(None), hp
             pass
 
     daily_posts = get_daily_published_count()
+    daily_curated_count = get_daily_curated_reels_count()
+    published_curated = get_published_curated_reels(50)
+    pending_curated = get_pending_curated_reels()
+    today_queued_news = get_today_queued_news_items(10)
+    today_queued_news_count = get_today_queued_news_count()
+    carousel_published_today = get_daily_news_carousel_published_today()
+
     import agent.config as cfg
     token_status = check_meta_token_status(cfg.INSTAGRAM_ACCESS_TOKEN)
 
@@ -386,12 +449,27 @@ def get_status(request: Request, authorization: Optional[str] = Header(None), hp
         "replies_count": replies_count,
         "daily_posts_count": daily_posts,
         "max_daily_posts": MAX_DAILY_POSTS,
-        "crawl_interval_hours": CRAWL_INTERVAL_HOURS,
-        "post_interval_hours": POST_INTERVAL_HOURS,
+
+        # Curated Reels Analytics
+        "daily_curated_count": daily_curated_count,
+        "max_daily_reels": MAX_DAILY_REEL_UPLOADS,
+        "published_curated_reels": published_curated,
+        "pending_curated_reels": pending_curated,
+        "pending_curated_count": len(pending_curated),
+        "reels_date_cutoff": REELS_DATE_CUTOFF,
+        "monitored_handles_count": len(TARGET_REEL_HANDLES),
+        "monitored_handles": TARGET_REEL_HANDLES,
+
+        # 7:00 PM News Carousel Analytics
+        "today_queued_news_count": today_queued_news_count,
+        "today_queued_news_items": today_queued_news,
+        "carousel_published_today": carousel_published_today,
+        "daily_carousel_time": DAILY_CAROUSEL_TIME,
+
         "next_jobs": next_jobs,
         "queued_items": queued_items,
         "recent_posts": recent_posts,
-        "logs": system_logs[-80:]
+        "logs": system_logs[-100:]
     }
 
 # Agent Controls
@@ -521,6 +599,62 @@ def clear_logs(request: Request, authorization: Optional[str] = Header(None), hp
     system_logs.clear()
     log_event("Terminal logs cleared by Admin.")
     return {"message": "Logs cleared"}
+
+# =========================================================================
+# Curated Reels API Endpoints
+# =========================================================================
+
+class ManualReelRequest(BaseModel):
+    url: str
+    force: bool = False
+
+@app.post("/api/reels/scan-now")
+def trigger_reels_scan(background_tasks: BackgroundTasks, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    log_event("🔍 Manual Curated Reels Scan Triggered across 40 target handles...")
+    background_tasks.add_task(safe_reels_scan_cycle)
+    return {"message": "Reels Scan Dispatched in Background!"}
+
+@app.post("/api/reels/post-next")
+def trigger_reels_post_next(background_tasks: BackgroundTasks, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    log_event("⚡ Manual Post of Next Curated Reel Triggered...")
+    background_tasks.add_task(safe_reels_post_cycle, False, 1)
+    return {"message": "Posting Next Curated Reel Dispatched!"}
+
+@app.post("/api/reels/manual-add")
+def manual_add_reel(req: ManualReelRequest, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    log_event(f"➕ Manual Reel Addition Requested: {req.url}")
+    result = manually_enqueue_reel(req.url, force=req.force)
+    if result.get("success"):
+        r = result.get("reel", {})
+        log_event(f"✅ Reel ({r.get('shortcode')}) successfully queued for @{r.get('uploader_handle')}!")
+        return result
+    return JSONResponse(status_code=400, content=result)
+
+@app.post("/api/reels/skip/{reel_id}")
+def skip_reel_endpoint(reel_id: int, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    skip_curated_reel(reel_id)
+    log_event(f"⏭️ Curated Reel #{reel_id} skipped by Admin.")
+    return {"message": f"Reel #{reel_id} skipped"}
+
+# =========================================================================
+# Single Daily 7:00 PM News Carousel API Endpoint
+# =========================================================================
+
+@app.post("/api/news-carousel/publish-now")
+def trigger_daily_news_carousel(background_tasks: BackgroundTasks, request: Request, authorization: Optional[str] = Header(None), hpu_auth_session: Optional[str] = Cookie(None)):
+    if not verify_auth(request, authorization, hpu_auth_session):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+    log_event("⚡ Manual 7 PM Daily News Carousel Publish Triggered...")
+    background_tasks.add_task(safe_daily_7pm_carousel_cycle, False, True)
+    return {"message": "Daily News Carousel Dispatched!"}
 
 if __name__ == "__main__":
     import uvicorn

@@ -9,10 +9,10 @@ if sys.stdout.encoding != 'utf-8':
     except Exception:
         pass
 
-from .config import INSTAGRAM_HANDLE, MAX_DAILY_POSTS
+from .config import INSTAGRAM_HANDLE, MAX_DAILY_POSTS, MAX_DAILY_REEL_UPLOADS, DAILY_CAROUSEL_TIME
 from .scrapers import run_crawler_pipeline
 from .news_classifier import classify_and_synthesize_update, bundle_routine_carousels
-from .card_renderer import render_breaking_card, render_carousel_slides
+from .card_renderer import render_breaking_card, render_carousel_slides, render_daily_roundup_carousel, clean_ascii_text
 from .reel_generator import create_looping_reel
 from .uploader import upload_image, upload_video
 from .poster import publish_to_instagram, publish_carousel_to_instagram, publish_reel_to_instagram, post_first_comment
@@ -23,7 +23,15 @@ from .db import (
     get_all_waiting_items,
     get_daily_published_count,
     record_published_post,
-    mark_items_published
+    mark_items_published,
+    get_today_queued_news_items,
+    get_daily_news_carousel_published_today,
+    get_daily_curated_reels_count
+)
+from .reels_curator import (
+    scan_target_handles_for_reels,
+    process_curated_reels_queue,
+    publish_curated_reel_record
 )
 
 def publish_breaking_reel_cycle(item: Optional[Dict[str, Any]] = None, dry_run: bool = False, is_manual: bool = False) -> Optional[Dict[str, Any]]:
@@ -275,6 +283,115 @@ def execute_scheduled_publishing_cycle(dry_run: bool = False, is_manual: bool = 
         batch = waiting_items[:5]
         print(f"  📚 {total_waiting} updates detected (Multiple threshold) -> Bundling {len(batch)} circulars into a CAROUSEL ALBUM...")
         return publish_routine_carousel_cycle(items=batch, dry_run=dry_run, is_manual=is_manual)
+
+def publish_daily_7pm_news_carousel(dry_run: bool = False, is_manual: bool = False) -> Optional[Dict[str, Any]]:
+    """
+    Renders and publishes the SINGLE DAILY HPU NEWS CAROUSEL at 7:00 PM IST.
+    Gathers all text news queued from newspapers, official portals, and notification boards.
+    Each slide displays the headline and a brief explanation that fits cleanly on the card.
+    Strictly max 1 carousel per day (unless triggered manually by admin).
+    """
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    today_str = datetime.now().strftime("%Y-%m-%d")
+
+    if not is_manual and get_daily_news_carousel_published_today() and not dry_run:
+        print(f"\n[{timestamp}] ⏸️ [7 PM Carousel] Daily news carousel has already been published today ({today_str}). Skipping.")
+        return None
+
+    print(f"\n[{timestamp}] 📰 INITIATING DAILY 7:00 PM HPU NEWS ROUNDUP CAROUSEL CYCLE...")
+
+    waiting_items = get_today_queued_news_items(limit=10)
+    if not waiting_items:
+        if is_manual:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM scraped_items ORDER BY id DESC LIMIT 6")
+            rows = cursor.fetchall()
+            conn.close()
+            if rows:
+                waiting_items = [dict(r) for r in rows]
+        if not waiting_items:
+            print("  📭 No queued news updates to include in today's 7 PM carousel.")
+            return None
+
+    total_stories = len(waiting_items)
+    item_ids = [it.get("id") for it in waiting_items if it.get("id")]
+    print(f"  Bundling {total_stories} daily news stories for 7 PM Carousel (IDs: {item_ids})...")
+
+    # Step 1: Render Carousel Cards (1 slide per story with Headline + Brief explanation)
+    slide_paths = render_daily_roundup_carousel(waiting_items)
+    print(f"  ✔ Rendered {len(slide_paths)} daily roundup carousel slides.")
+
+    # Step 2: Upload slide images
+    image_urls = []
+    for idx, spath in enumerate(slide_paths, start=1):
+        url = upload_image(spath)
+        image_urls.append(url)
+        print(f"  ✔ Slide {idx}/{len(slide_paths)} hosted: {url}")
+        time.sleep(0.4)
+
+    # Step 3: Build cohesive daily roundup caption
+    date_display = datetime.now().strftime("%d %B %Y")
+    headlines_summary = "\n".join([f"• {clean_ascii_text(it.get('title', ''))[:70]}" for it in waiting_items[:5]])
+    caption = (
+        f"🏛 HPU DAILY NEWS ROUNDUP • {date_display}\n\n"
+        f"Swipe through for today's top official university circulars, exam alerts, results, and administrative updates:\n\n"
+        f"{headlines_summary}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"📢 Posted daily at 7:00 PM IST by @hpu.pulse\n"
+        f"Save this post & share with fellow students!\n\n"
+        f"#HPU #HPUShimla #HimachalPradeshUniversity #HPUUpdates #Shimla #HPUExams #HPUResults #HimachalNews"
+    )
+
+    # Step 4: Publish to Instagram
+    if dry_run:
+        media_id = f"dry_run_daily_carousel_{int(time.time())}"
+        print(f"  [DRY RUN] Daily 7 PM Carousel rendered with {len(image_urls)} slides (Skipped IG publish).")
+    else:
+        print(f"  Sending daily 7 PM carousel to Meta Instagram Graph API...")
+        try:
+            media_id = publish_carousel_to_instagram(image_urls, caption, is_emergency=is_manual, is_manual=is_manual)
+            print(f"  ✔ DAILY 7 PM CAROUSEL PUBLISHED TO INSTAGRAM! Media ID: {media_id}")
+
+            comment_text = (
+                f"💬 Daily Campus Roundup ({date_display}) is live!\n"
+                "Comment your queries or branch/semester below. We respond to all student questions!"
+            )
+            post_first_comment(media_id, comment_text)
+        except Exception as e:
+            print(f"  ❌ Daily News Carousel Publish Failed: {e}")
+            raise e
+
+    # Record in DB & mark items published
+    record_published_post(
+        post_type="CAROUSEL",
+        tier="DAILY_7PM_ROUNDUP",
+        category="DAILY_ROUNDUP",
+        headline=f"HPU Daily News Roundup ({date_display})",
+        caption=caption,
+        media_urls=image_urls,
+        instagram_media_id=media_id,
+        audio_track=None,
+        scraped_item_ids=item_ids
+    )
+
+    return {
+        "timestamp": timestamp,
+        "type": "daily_7pm_carousel",
+        "headline": f"HPU Daily News Roundup ({date_display})",
+        "slides_count": len(image_urls),
+        "stories_count": total_stories,
+        "media_id": media_id
+    }
+
+def run_curated_reels_scanner_cycle() -> int:
+    """Scans all monitored Category 1-4 handles and enqueues qualified reels."""
+    discovered = scan_target_handles_for_reels()
+    return len(discovered)
+
+def publish_next_curated_reel_cycle(dry_run: bool = False, max_to_post: int = 1) -> int:
+    """Processes and publishes eligible reels from the curated queue up to daily cap (15)."""
+    return process_curated_reels_queue(dry_run=dry_run, max_to_post=max_to_post)
 
 # Backward-compatibility alias
 run_automated_check_and_post_cycle = execute_scheduled_publishing_cycle
