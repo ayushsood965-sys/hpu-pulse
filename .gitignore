@@ -22,6 +22,8 @@ agent_data.db-journal
 generated_cards/*.png
 generated_cards/*.mp4
 generated_cards/*.mp3
+generated_cards/curated_reels/*
+*.mp4
 !generated_cards/.gitkeep
 
 # IDE & OS
