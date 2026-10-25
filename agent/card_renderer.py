@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from .config import OUTPUT_DIR, INSTAGRAM_HANDLE
+from .news_classifier import translate_hindi_to_english, translate_news_to_english_points, BADGE_MAP_TO_ENGLISH
 
 WIDTH = 1080
 HEIGHT = 1350
@@ -222,49 +223,31 @@ BADGE_KEYWORDS = {
     "GENERAL": ["UPDATE", "NOTICE", "CIRCULAR", "अपडेट", "सूचना", "नोटिस", "रिसर्च", "शोध", "खोज"]
 }
 
-BADGE_MAP_TO_HINDI = {
-    "BREAKING NEWS": "ताज़ा अपडेट",
-    "BREAKING": "ताज़ा अपडेट",
-    "RESULT OUT": "परीक्षा परिणाम",
-    "RESULTS DECLARED": "परीक्षा परिणाम",
-    "RESULT": "परीक्षा परिणाम",
-    "EXAM ALERT": "परीक्षा सूचना",
-    "EXAM NOTICE": "परीक्षा सूचना",
-    "EXAM": "परीक्षा सूचना",
-    "ADMISSION ALERT": "प्रवेश सूचना",
-    "ADMISSION UPDATE": "प्रवेश सूचना",
-    "ADMISSION": "प्रवेश सूचना",
-    "CAMPUS ALERT": "परिसर अलर्ट",
-    "HOLIDAY": "अवकाश सूचना",
-    "OFFICIAL UPDATE": "आधिकारिक सूचना",
-    "UPDATE": "आधिकारिक सूचना",
-}
-
 def draw_official_header(canvas: Image.Image, badge_text: str, is_hindi: bool = False, slide_num: int = 1, total_slides: int = 1) -> str:
     """
     Renders top header:
     - Official circular HPU emblem in top center.
-    - Official University Name: 'हिमाचल प्रदेश विश्वविद्यालय, शिमला' / 'HIMACHAL PRADESH UNIVERSITY • SHIMLA'.
+    - Official University Name: 'HIMACHAL PRADESH UNIVERSITY • SHIMLA'.
     - Community Sub-tag: 'HPU PULSE • STUDENT PORTAL UPDATES'.
-    - Centered category badge pill with status dot.
+    - Centered category badge pill with status dot in English.
     - Optional slide counter pill (e.g. '1/4').
     """
     draw = ImageDraw.Draw(canvas)
     clean_badge = clean_display_text(badge_text).strip()
-    is_hi = is_hindi or is_hindi_text(clean_badge)
 
-    # Translate English badge to Hindi if the card context is in Hindi
-    if is_hi and not is_hindi_text(clean_badge):
-        upper_raw = clean_badge.upper()
-        for eng_k, hin_v in BADGE_MAP_TO_HINDI.items():
-            if eng_k in upper_raw:
-                clean_badge = hin_v
+    # Translate Hindi badge to English if present
+    if is_hindi_text(clean_badge):
+        matched = False
+        for hin_k, eng_v in BADGE_MAP_TO_ENGLISH.items():
+            if hin_k in clean_badge:
+                clean_badge = eng_v
+                matched = True
                 break
-        if not is_hindi_text(clean_badge):
-            clean_badge = "आधिकारिक सूचना"
+        if not matched:
+            clean_badge = "OFFICIAL UPDATE"
 
     if not clean_badge:
-        clean_badge = "आधिकारिक सूचना" if is_hi else "OFFICIAL UPDATE"
+        clean_badge = "OFFICIAL UPDATE"
 
     # 1. Official HPU Logo at top center
     logo_size = 80
@@ -287,21 +270,21 @@ def draw_official_header(canvas: Image.Image, badge_text: str, is_hindi: bool = 
         except Exception:
             pass
 
-    # 2. University Title
-    title_text = "हिमाचल प्रदेश विश्वविद्यालय, शिमला" if is_hi else "HIMACHAL PRADESH UNIVERSITY • SHIMLA"
-    t_font = get_font("bold", 22, is_hindi=is_hi)
+    # 2. University Title (Strictly English)
+    title_text = "HIMACHAL PRADESH UNIVERSITY • SHIMLA"
+    t_font = get_font("bold", 22, is_hindi=False)
     t_bbox = draw.textbbox((0, 0), title_text, font=t_font)
     tw = t_bbox[2] - t_bbox[0]
     draw.text(((WIDTH - tw) // 2, logo_y + logo_size + 14), title_text, fill=THEME["primary"], font=t_font)
 
-    # Sub-tag
+    # Sub-tag (Strictly English)
     sub_font = get_font("semibold", 14, is_hindi=False)
     sub_tag = "HPU PULSE  •  STUDENT PORTAL UPDATES"
     st_bbox = draw.textbbox((0, 0), sub_tag, font=sub_font)
     stw = st_bbox[2] - st_bbox[0]
     draw.text(((WIDTH - stw) // 2, logo_y + logo_size + 44), sub_tag, fill=THEME["muted"], font=sub_font)
 
-    # 3. Category status badge pill
+    # 3. Category status badge pill (Strictly English)
     upper_badge = clean_badge.upper()
     badge_key = "GENERAL"
     for cat, kws in BADGE_KEYWORDS.items():
@@ -310,7 +293,7 @@ def draw_official_header(canvas: Image.Image, badge_text: str, is_hindi: bool = 
             break
     col = BADGE_COLORS.get(badge_key, BADGE_COLORS["GENERAL"])
 
-    b_font = get_font("bold", 21, is_hindi=is_hi)
+    b_font = get_font("bold", 21, is_hindi=False)
     b_bbox = draw.textbbox((0, 0), clean_badge, font=b_font)
     bw = b_bbox[2] - b_bbox[0]
     bh = b_bbox[3] - b_bbox[1]
@@ -340,15 +323,15 @@ def draw_official_header(canvas: Image.Image, badge_text: str, is_hindi: bool = 
 draw_header = draw_official_header
 
 def draw_official_footer(draw: ImageDraw.ImageDraw, is_cover: bool = False, is_hindi: bool = False):
-    """Draws crisp verified community footer in English or Hindi."""
+    """Draws crisp verified community footer strictly in English."""
     f_font = get_font("bold", 23, is_hindi=False)
     handle_text = f"{INSTAGRAM_HANDLE}  •  Shimla, Himachal Pradesh"
     f_bbox = draw.textbbox((0, 0), handle_text, font=f_font)
     fw = f_bbox[2] - f_bbox[0]
     draw.text(((WIDTH - fw) / 2, HEIGHT - 100), handle_text, fill=THEME["footer"], font=f_font)
 
-    sub_font = get_font("medium", 19, is_hindi=is_hindi)
-    sub_text = "यह पोस्ट सेव करें और सहपाठियों के साथ शेयर करें" if is_hindi else "Save this post  •  Share with your classmates"
+    sub_font = get_font("medium", 19, is_hindi=False)
+    sub_text = "Save this post  •  Share with your classmates"
     s_bbox = draw.textbbox((0, 0), sub_text, font=sub_font)
     sw = s_bbox[2] - s_bbox[0]
     draw.text(((WIDTH - sw) / 2, HEIGHT - 68), sub_text, fill=THEME["dim"], font=sub_font)
@@ -381,29 +364,36 @@ def parse_points(details: str, key_points: list = None) -> list:
 
 def render_breaking_card(headline: str, category: str = "GENERAL", details: str = "", badge: str = "BREAKING NEWS", key_points: list = None) -> str:
     """
-    Renders a stunning 1080x1350 card with:
+    Renders a stunning 1080x1350 card strictly in English:
     - Pure white background with faded mountains and HPU seal.
     - Dark green typography for headline and body text.
     - Soft pastel mint content panel with light green border.
-    - Fully supports English and Hindi.
+    - 100% English typography and messaging.
     """
     clean_h = clean_display_text(headline)
+    if is_hindi_text(clean_h):
+        clean_h = translate_hindi_to_english(clean_h, is_headline=True)
+
     points = parse_points(details, key_points)
-    is_hi = is_hindi_text(f"{clean_h} {' '.join(points)} {badge} {details}")
+    clean_points = []
+    for pt in points:
+        if is_hindi_text(pt):
+            clean_points.append(translate_hindi_to_english(pt, is_headline=False))
+        else:
+            clean_points.append(pt)
+    points = clean_points
 
     if not points:
-        if is_hi:
-            points = [
-                "विस्तृत जानकारी के लिए आधिकारिक छात्र पोर्टल पर लॉगिन करें।",
-                "सभी आवश्यक दिशा-निर्देश पोर्टल पर उपलब्ध करा दिए गए हैं।"
-            ]
-        else:
-            points = [
-                "Details available on official student portal.",
-                "Check your student account for more instructions."
-            ]
+        points = [
+            "Official notification released on university student portal.",
+            "Students can check individual details through their portal accounts.",
+            "Contact departmental administration for further guidelines."
+        ]
 
     upper_b = (badge or "").upper()
+    if is_hindi_text(upper_b):
+        upper_b = "BREAKING NEWS"
+
     badge_key = "GENERAL"
     for cat, kws in BADGE_KEYWORDS.items():
         if any(kw in upper_b for kw in kws) or any(kw in (category or "").upper() for kw in kws):
@@ -414,11 +404,11 @@ def render_breaking_card(headline: str, category: str = "GENERAL", details: str 
     canvas = create_base_canvas(badge_key)
     draw = ImageDraw.Draw(canvas)
 
-    # 2. Header with Logo & Badge
-    draw_official_header(canvas, badge, is_hindi=is_hi)
+    # 2. Header with Logo & Badge (English)
+    draw_official_header(canvas, badge, is_hindi=False)
 
-    # 3. Clean Headline in Dark Forest Green
-    h_font = get_font("bold", 54, is_hindi=is_hi)
+    # 3. Clean Headline in Dark Forest Green (English)
+    h_font = get_font("bold", 54, is_hindi=False)
     h_lines = wrap_text(clean_h, h_font, WIDTH - 170, draw)
     h_lines = h_lines[:3]
     line_h = 74
@@ -440,14 +430,14 @@ def render_breaking_card(headline: str, category: str = "GENERAL", details: str 
         width=2
     )
 
-    # Sub-header inside card
-    sub_head_font = get_font("semibold", 24, is_hindi=is_hi)
-    sub_head_text = "मुख्य बिंदु और आधिकारिक विवरण" if is_hi else "KEY DETAILS & OFFICIAL UPDATES"
+    # Sub-header inside card (English)
+    sub_head_font = get_font("semibold", 24, is_hindi=False)
+    sub_head_text = "KEY DETAILS & OFFICIAL UPDATES"
     draw.text((105, box_top + 30), sub_head_text, fill=THEME["muted"], font=sub_head_font)
     draw.line([(105, box_top + 64), (WIDTH - 105, box_top + 64)], fill=THEME["card_border"], width=1)
 
-    # 5. Bullet Points in Dark Pine with Emerald Dots
-    p_font = get_font("medium", 30, is_hindi=is_hi)
+    # 5. Bullet Points in Dark Pine with Emerald Dots (English)
+    p_font = get_font("medium", 30, is_hindi=False)
     bullet_color = BADGE_COLORS[badge_key]["bullet"]
     py = box_top + 88
     max_text_width = WIDTH - 270
@@ -471,8 +461,8 @@ def render_breaking_card(headline: str, category: str = "GENERAL", details: str 
 
         py += 24
 
-    # 6. Footer
-    draw_official_footer(draw, is_cover=True, is_hindi=is_hi)
+    # 6. Footer (English)
+    draw_official_footer(draw, is_cover=True, is_hindi=False)
 
     out_path = OUTPUT_DIR / f"hpu_card_{uuid.uuid4().hex[:8]}.png"
     canvas.save(str(out_path), "PNG", quality=95)
@@ -480,21 +470,16 @@ def render_breaking_card(headline: str, category: str = "GENERAL", details: str 
 
 def render_carousel_slides(carousel_data: dict) -> list:
     """
-    Renders 2-5 premium slides in:
+    Renders 2-5 premium slides in 100% English:
     - Pure white background with faded mountains and HPU logo.
     - Dark green typography for headline and body text.
     - Light green category accents, borders, and badge styling.
-    - Full support for Hindi and English.
+    - Strictly English titles, headings, and bullet points.
     """
     slides = carousel_data.get("slides", [])
     badge = carousel_data.get("badge", "UPDATE")
     total = len(slides)
     slide_paths = []
-
-    all_text = f"{badge} {carousel_data.get('headline', '')}"
-    for s in slides:
-        all_text += f" {s.get('title', '')} {s.get('subtitle', '')} {s.get('heading', '')} {' '.join(str(p) for p in s.get('points', []))}"
-    is_hi_overall = is_hindi_text(all_text)
 
     badge_key = "GENERAL"
     for cat, kws in BADGE_KEYWORDS.items():
@@ -509,16 +494,20 @@ def render_carousel_slides(carousel_data: dict) -> list:
         canvas = create_base_canvas(badge_key)
         draw = ImageDraw.Draw(canvas)
 
-        # 2. Header with Logo, Title, and Badge
-        draw_official_header(canvas, badge, is_hindi=is_hi_overall, slide_num=idx, total_slides=total)
+        # 2. Header with Logo, Title, and Badge (100% English)
+        draw_official_header(canvas, badge, is_hindi=False, slide_num=idx, total_slides=total)
 
         if idx == 1:
             # COVER SLIDE
             title = clean_display_text(s.get("title", carousel_data.get("headline", "HPU Update")))
-            subtitle = clean_display_text(s.get("subtitle", ""))
-            is_hi_cover = is_hi_overall or is_hindi_text(f"{title} {subtitle} {badge}")
+            if is_hindi_text(title):
+                title = translate_hindi_to_english(title, is_headline=True)
 
-            t_font = get_font("bold", 58, is_hindi=is_hi_cover)
+            subtitle = clean_display_text(s.get("subtitle", ""))
+            if is_hindi_text(subtitle):
+                subtitle = translate_hindi_to_english(subtitle, is_headline=False)
+
+            t_font = get_font("bold", 58, is_hindi=False)
             t_lines = wrap_text(title, t_font, WIDTH - 180, draw)
             total_th = len(t_lines) * 78
             y_start = (HEIGHT - total_th) / 2 - 30
@@ -529,14 +518,14 @@ def render_carousel_slides(carousel_data: dict) -> list:
                 draw.text(((WIDTH - lw) / 2, y_start + (i * 78)), line, fill=THEME["primary"], font=t_font)
 
             if subtitle:
-                sub_font = get_font("semibold", 30, is_hindi=is_hi_cover)
+                sub_font = get_font("semibold", 30, is_hindi=False)
                 s_bbox = draw.textbbox((0, 0), subtitle, font=sub_font)
                 sw = s_bbox[2] - s_bbox[0]
                 draw.text(((WIDTH - sw) / 2, y_start + total_th + 32), subtitle, fill=THEME["muted"], font=sub_font)
 
-            # Swipe cue button pill (Soft mint background, light green border, dark green text)
-            sw_font = get_font("bold", 23, is_hindi=is_hi_cover)
-            sw_text = "पूरी जानकारी के लिए स्वाइप करें  >>" if is_hi_cover else "SWIPE FOR FULL DETAILS  >>"
+            # Swipe cue button pill (Strictly English)
+            sw_font = get_font("bold", 23, is_hindi=False)
+            sw_text = "SWIPE FOR FULL DETAILS  >>"
             sw_bbox = draw.textbbox((0, 0), sw_text, font=sw_font)
             sw_w = sw_bbox[2] - sw_bbox[0]
             sw_h = sw_bbox[3] - sw_bbox[1]
@@ -554,29 +543,31 @@ def render_carousel_slides(carousel_data: dict) -> list:
                 width=2
             )
             draw.text(((WIDTH - sw_w) / 2, pill_y + 10), sw_text, fill=THEME["primary"], font=sw_font)
-            draw_official_footer(draw, is_cover=True, is_hindi=is_hi_cover)
+            draw_official_footer(draw, is_cover=True, is_hindi=False)
 
         else:
             # DETAIL SLIDES
-            default_heading = "मुख्य विवरण" if is_hi_overall else "Key Information"
-            heading = clean_display_text(s.get("heading") or default_heading)
+            heading = clean_display_text(s.get("heading") or "Key Information")
+            if is_hindi_text(heading):
+                heading = translate_hindi_to_english(heading, is_headline=True)
+
             raw_points = s.get("points", [])
-            points = [clean_display_text(str(p)) for p in raw_points if clean_display_text(str(p))]
-            is_hi_detail = is_hi_overall or is_hindi_text(f"{heading} {' '.join(points)}")
+            points = []
+            for p in raw_points:
+                cl_p = clean_display_text(str(p))
+                if cl_p:
+                    if is_hindi_text(cl_p):
+                        points.append(translate_hindi_to_english(cl_p, is_headline=False))
+                    else:
+                        points.append(cl_p)
 
             if not points:
-                if is_hi_detail:
-                    points = [
-                        "विस्तृत जानकारी के लिए आधिकारिक छात्र पोर्टल पर लॉगिन करें।",
-                        "सभी आवश्यक दिशा-निर्देश पोर्टल पर उपलब्ध करा दिए गए हैं।"
-                    ]
-                else:
-                    points = [
-                        "Details available on official student portal.",
-                        "Check your student account for more instructions."
-                    ]
+                points = [
+                    "Details available on official student portal.",
+                    "Check your student account for more instructions."
+                ]
 
-            h_font = get_font("bold", 44, is_hindi=is_hi_detail)
+            h_font = get_font("bold", 44, is_hindi=False)
             draw.text((85, 230), heading, fill=THEME["primary"], font=h_font)
             draw.line([(85, 290), (WIDTH - 85, 290)], fill=THEME["card_border"], width=2)
 
@@ -590,7 +581,7 @@ def render_carousel_slides(carousel_data: dict) -> list:
                 width=2
             )
 
-            p_font = get_font("medium", 30, is_hindi=is_hi_detail)
+            p_font = get_font("medium", 30, is_hindi=False)
             py = box_top + 45
             max_p_width = WIDTH - 260
 
@@ -613,7 +604,7 @@ def render_carousel_slides(carousel_data: dict) -> list:
 
                 py += 24
 
-            draw_official_footer(draw, is_cover=False, is_hindi=is_hi_detail)
+            draw_official_footer(draw, is_cover=False, is_hindi=False)
 
         slide_file = OUTPUT_DIR / f"slide_{uuid.uuid4().hex[:8]}_{idx}.png"
         canvas.save(str(slide_file), "PNG", quality=95)
@@ -623,12 +614,12 @@ def render_carousel_slides(carousel_data: dict) -> list:
 
 def render_daily_roundup_carousel(news_items: list) -> list:
     """
-    Renders the Single Daily News Roundup Carousel (posted at 7:00 PM IST).
+    Renders the Single Daily News Roundup Carousel (posted at 7:00 PM IST) strictly in 100% ENGLISH.
     Each slide represents one news story:
-    - Bold, clear headline
-    - Inset card with brief bullet-point explanation that fits cleanly
-    - Official HPU crest header + Category badge pill
-    - Source & date attribution in footer
+    - Bold, clear English headline
+    - Inset card with brief bullet-point English explanation that fits cleanly
+    - Official HPU crest header + Category badge pill in English
+    - Source & date attribution in footer in English
     Meta Graph API hard limit: 2 to 10 images.
     """
     if not news_items:
@@ -647,13 +638,26 @@ def render_daily_roundup_carousel(news_items: list) -> list:
     slide_paths = []
 
     for idx, item in enumerate(items_to_render, start=1):
-        title = clean_display_text(item.get("title", "HPU University Update"))
-        summary = clean_display_text(item.get("summary") or item.get("raw_text") or "")
-        category = (item.get("category") or "GENERAL").upper()
-        source = clean_display_text(item.get("source") or "HPU Portal")
-        notice_date = clean_display_text(item.get("notice_date") or datetime.now().strftime("%d %b %Y"))
+        raw_title = clean_display_text(item.get("title", "HPU University Update"))
+        raw_summary = clean_display_text(item.get("summary") or item.get("raw_text") or "")
 
-        is_hi = is_hindi_text(f"{title} {summary}")
+        # Strictly translate Hindi news to English
+        if is_hindi_text(raw_title) or is_hindi_text(raw_summary):
+            title, points = translate_news_to_english_points(raw_title, raw_summary)
+        else:
+            title = raw_title
+            raw_pts = [p.strip() for p in re.split(r'[.\n|]', raw_summary) if len(p.strip()) > 15]
+            points = raw_pts[:4]
+
+        category = (item.get("category") or "GENERAL").upper()
+        if is_hindi_text(category):
+            category = "GENERAL"
+
+        source = clean_display_text(item.get("source") or "HPU Portal")
+        if is_hindi_text(source):
+            source = "Regional Media"
+
+        notice_date = clean_display_text(item.get("notice_date") or datetime.now().strftime("%d %b %Y"))
 
         badge_key = "GENERAL"
         for cat, kws in BADGE_KEYWORDS.items():
@@ -664,15 +668,15 @@ def render_daily_roundup_carousel(news_items: list) -> list:
         canvas = create_base_canvas(badge_key)
         draw = ImageDraw.Draw(canvas)
 
-        # 1. Header
+        # 1. Header (Strictly English)
         badge_text = category
-        draw_official_header(canvas, badge_text, is_hindi=is_hi, slide_num=idx, total_slides=total)
+        draw_official_header(canvas, badge_text, is_hindi=False, slide_num=idx, total_slides=total)
 
-        # 2. Headline
-        h_font = get_font("bold", 42, is_hindi=is_hi)
+        # 2. Headline in English
+        h_font = get_font("bold", 42, is_hindi=False)
         max_h_width = WIDTH - 160
         h_lines = wrap_text(title, h_font, max_h_width, draw)
-        
+
         # Limit headline lines to max 3
         if len(h_lines) > 3:
             h_lines = h_lines[:3]
@@ -700,32 +704,20 @@ def render_daily_roundup_carousel(news_items: list) -> list:
             width=2
         )
 
-        # Section Subtitle inside card
-        sub_title = "संक्षिप्त विवरण एवं मुख्य बिंदु" if is_hi else "Key Highlights & Briefing"
-        st_font = get_font("bold", 24, is_hindi=is_hi)
+        # Section Subtitle inside card (Strictly English)
+        sub_title = "Key Highlights & Briefing"
+        st_font = get_font("bold", 24, is_hindi=False)
         draw.text((95, box_top + 28), sub_title, fill=THEME["muted"], font=st_font)
         draw.ellipse([80, box_top + 36, 88, box_top + 44], fill=THEME["corner_accent"])
 
-        # Extract/split summary into brief bullet points
-        points = []
-        if summary:
-            raw_pts = [p.strip() for p in re.split(r'[।.\n|]', summary) if len(p.strip()) > 15]
-            points = raw_pts[:4]
         if not points:
-            if is_hi:
-                points = [
-                    "विश्वविद्यालय द्वारा इस संबंध में विस्तृत अधिसूचना जारी की गई है।",
-                    "छात्र अपने लॉगिन पोर्टल पर जाकर पूरी जानकारी देख सकते हैं।",
-                    "संबंधित विभाग से अधिक जानकारी प्राप्त की जा सकती है।"
-                ]
-            else:
-                points = [
-                    "Detailed official notification published on university portal.",
-                    "Students can log into their portal accounts to check further guidelines.",
-                    "Contact the concerned department or examination branch for assistance."
-                ]
+            points = [
+                "Detailed official notification published on university portal.",
+                "Students can log into their portal accounts to check further guidelines.",
+                "Contact the concerned department or examination branch for assistance."
+            ]
 
-        p_font = get_font("medium", 28, is_hindi=is_hi)
+        p_font = get_font("medium", 28, is_hindi=False)
         py = box_top + 80
         max_p_width = WIDTH - 240
         bullet_col = BADGE_COLORS.get(badge_key, BADGE_COLORS["GENERAL"])["bullet"]
@@ -743,13 +735,13 @@ def render_daily_roundup_carousel(news_items: list) -> list:
                 py += 44
             py += 18
 
-        # Inset source & date attribution badge at the bottom of the card
-        src_tag = f"स्रोत: {source} • {notice_date}" if is_hi else f"Source: {source} • {notice_date}"
-        src_font = get_font("semibold", 18, is_hindi=is_hi)
+        # Inset source & date attribution badge in English
+        src_tag = f"Source: {source} • {notice_date}"
+        src_font = get_font("semibold", 18, is_hindi=False)
         draw.text((95, box_bottom - 42), src_tag, fill=THEME["dim"], font=src_font)
 
-        # 5. Footer
-        draw_official_footer(draw, is_cover=False, is_hindi=is_hi)
+        # 5. Footer (Strictly English)
+        draw_official_footer(draw, is_cover=False, is_hindi=False)
 
         out_slide = OUTPUT_DIR / f"daily_news_{uuid.uuid4().hex[:8]}_{idx}.png"
         canvas.save(str(out_slide), "PNG", quality=95)

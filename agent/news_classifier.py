@@ -4,42 +4,183 @@ import requests
 from typing import Dict, Any, List
 from .config import GEMINI_API_KEY, GEMINI_MODEL, OPENROUTER_API_KEY, OPENROUTER_MODELS
 
-BADGE_MAP_TO_HINDI = {
-    "BREAKING NEWS": "ताज़ा अपडेट",
-    "BREAKING": "ताज़ा अपडेट",
-    "RESULT OUT": "परीक्षा परिणाम",
-    "RESULTS DECLARED": "परीक्षा परिणाम",
-    "RESULT": "परीक्षा परिणाम",
-    "EXAM ALERT": "परीक्षा सूचना",
-    "EXAM NOTICE": "परीक्षा सूचना",
-    "EXAM": "परीक्षा सूचना",
-    "ADMISSION ALERT": "प्रवेश सूचना",
-    "ADMISSION UPDATE": "प्रवेश सूचना",
-    "ADMISSION": "प्रवेश सूचना",
-    "CAMPUS ALERT": "परिसर अलर्ट",
-    "HOLIDAY": "अवकाश सूचना",
-    "OFFICIAL UPDATE": "आधिकारिक सूचना",
-    "UPDATE": "आधिकारिक सूचना",
-}
-
-CATEGORY_MAP_TO_HINDI = {
-    "EXAM": "परीक्षा",
-    "RESULT": "परिणाम",
-    "ADMISSION": "प्रवेश",
-    "HOLIDAY": "अवकाश",
-    "ACADEMIC": "शैक्षणिक",
-    "GENERAL": "सामान्य",
-    "BREAKING": "ताज़ा"
+BADGE_MAP_TO_ENGLISH = {
+    "ताज़ा अपडेट": "BREAKING NEWS",
+    "ताजा अपडेट": "BREAKING NEWS",
+    "परीक्षा परिणाम": "RESULT OUT",
+    "परिणाम घोषित": "RESULTS DECLARED",
+    "परीक्षा सूचना": "EXAM ALERT",
+    "परीक्षा फॉर्म": "EXAM NOTICE",
+    "प्रवेश सूचना": "ADMISSION ALERT",
+    "परिसर अलर्ट": "CAMPUS ALERT",
+    "अवकाश सूचना": "HOLIDAY ALERT",
+    "आधिकारिक सूचना": "OFFICIAL UPDATE",
+    "शोध अपडेट": "RESEARCH UPDATE",
+    "नवीनतम अपडेट": "LATEST UPDATE",
+    "शैक्षणिक अपडेट": "ACADEMIC UPDATE"
 }
 
 def is_hindi_text(text: str) -> bool:
     """Returns True if the text contains Devanagari characters (\u0900-\u097F)."""
     return bool(re.search(r'[\u0900-\u097F]', text or ""))
 
+def clean_text_no_urls(text: str) -> str:
+    """Strips any URLs, website domains, and media sources completely."""
+    clean = re.sub(r"https?://\S+", "", text or "")
+    clean = re.sub(r"(?:www\.)?(?:nexams|nadmissions|hpushimla|hpuniv)\.(?:in|ac\.in|org)", "portal", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"(?:source|verified from|check on):\s*[\w\.\-/]+", "", clean, flags=re.IGNORECASE)
+    clean = re.sub(r"\s*-\s*(?:ANI\s*News|Amar\s*Ujala|Divya\s*Himachal|The\s*Tribune|Hindustan\s*Times|Times\s*of\s*India|Indian\s*Express|Jagran|News18).*$", "", clean, flags=re.IGNORECASE)
+    return clean.strip()
+
+def translate_hindi_to_english(text: str, is_headline: bool = True) -> str:
+    """
+    Translates Hindi news headline or brief summary into clear, concise, professional English for students.
+    Guarantees 0 Devanagari characters in returned string.
+    """
+    if not text or not is_hindi_text(text):
+        return clean_text_no_urls(text or "").strip()
+
+    clean_in = clean_text_no_urls(text).strip()
+
+    # 1. Gemini Translation
+    if GEMINI_API_KEY and not GEMINI_API_KEY.startswith("your_"):
+        target_style = "concise, punchy news headline (max 8-10 words)" if is_headline else "concise 1-2 sentence news briefing"
+        prompt = (
+            f"You are a professional university news editor. Translate this Hindi text about Himachal Pradesh University (HPU Shimla) "
+            f"into fluent, natural, professional English suitable for university students as a {target_style}. "
+            f"Preserve examination titles, semesters, dates, and numbers accurately. "
+            f"Output ONLY the English text with no quotes, notes, or explanation:\n\n{clean_in}"
+        )
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 200}
+        }
+        try:
+            resp = requests.post(url, json=payload, timeout=8)
+            if resp.status_code == 200:
+                res_data = resp.json()
+                candidate = res_data.get("candidates", [{}])[0]
+                parts = candidate.get("content", {}).get("parts", [])
+                out = "\n".join([p.get("text", "") for p in parts if "text" in p]).strip()
+                if out and not is_hindi_text(out):
+                    return out.strip('"').strip("'")
+        except Exception:
+            pass
+
+    # 2. OpenRouter Fallback
+    if OPENROUTER_API_KEY and not OPENROUTER_API_KEY.startswith("your_"):
+        for model in OPENROUTER_MODELS[:2]:
+            try:
+                res = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
+                    json={
+                        "model": model,
+                        "messages": [{"role": "user", "content": f"Translate this Hindi news about Himachal Pradesh University to concise English: {clean_in}. Output only English."}],
+                        "temperature": 0.2
+                    },
+                    timeout=8
+                )
+                if res.status_code == 200:
+                    out = res.json()["choices"][0]["message"]["content"].strip()
+                    if out and not is_hindi_text(out):
+                        return out.strip('"').strip("'")
+            except Exception:
+                continue
+
+    # 3. Rule-based / academic dictionary fallback
+    t = clean_in
+    subs = [
+        (r'हिमाचल प्रदेश विश्वविद्यालय|हिमाचल विश्वविद्यालय|एचपीयू|वि\.वि\.|विवि', 'HPU'),
+        (r'समरहिल परिसर|समरहिल', 'Summerhill Campus'),
+        (r'परीक्षा परिणाम|परिणाम घोषित|परिणाम', 'Results Declared'),
+        (r'परीक्षाएं|परीक्षाओं|परीक्षा', 'Examinations'),
+        (r'प्रवेश परीक्षा|प्रवेश प्रक्रिया|प्रवेश', 'Admissions'),
+        (r'अधिसूचना जारी|अधिसूचना', 'Official Notification Released'),
+        (r'सत्र|सेमेस्टर', 'Semester'),
+        (r'छात्रों|छात्र संघ|छात्र', 'Students'),
+        (r'मेरिट सूची', 'Merit List'),
+        (r'डेटशीट जारी|डेटशीट', 'Datesheet Released'),
+        (r'आवेदन की अंतिम तिथि|अंतिम तिथि', 'Application Deadline'),
+        (r'शुल्क|फीस', 'Fee'),
+        (r'अवकाश|छुट्टी', 'Holiday Announcement'),
+        (r'स्थगित', 'Postponed'),
+        (r'जारी किया शेड्यूल|शेड्यूल', 'Schedule Announced'),
+        (r'विश्वविद्यालय प्रशासन', 'University Administration'),
+        (r'कुलपति', 'Vice Chancellor'),
+    ]
+    for pattern, rep in subs:
+        t = re.sub(pattern, rep, t, flags=re.IGNORECASE)
+
+    # Strip remaining Devanagari characters
+    t = re.sub(r'[\u0900-\u097F]+', ' ', t)
+    t = re.sub(r'\s+', ' ', t).strip()
+    if len(t) < 8:
+        return "HPU University Notice & Campus Update" if is_headline else "Official circular issued by university administration on student portal."
+    return t
+
+def translate_news_to_english_points(title: str, summary: str) -> tuple[str, list[str]]:
+    """
+    Translates Hindi news (from newspapers/competitors/portal) into a punchy English headline and 2-3 concise English bullet points.
+    """
+    clean_t = clean_text_no_urls(title)
+    clean_s = clean_text_no_urls(summary)
+
+    en_title = translate_hindi_to_english(clean_t, is_headline=True)
+
+    if GEMINI_API_KEY and not GEMINI_API_KEY.startswith("your_"):
+        prompt = (
+            f"You are an editor for HPU student community @hpu.pulse. Synthesize this university news into:\n"
+            f"1. A punchy English headline (max 9 words).\n"
+            f"2. Exactly 2 to 3 concise English bullet points explaining the core details for students (max 16 words each).\n\n"
+            f"Notice Title: {clean_t}\n"
+            f"Details: {clean_s[:600]}\n\n"
+            f"Return JSON strictly formatted as:\n"
+            f'{{"headline": "...", "points": ["...", "..."]}}'
+        )
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 300}
+        }
+        try:
+            resp = requests.post(url, json=payload, timeout=8)
+            if resp.status_code == 200:
+                res_data = resp.json()
+                candidate = res_data.get("candidates", [{}])[0]
+                parts = candidate.get("content", {}).get("parts", [])
+                raw_out = "\n".join([p.get("text", "") for p in parts if "text" in p])
+                parsed = extract_json_from_response(raw_out)
+                if parsed and parsed.get("headline") and parsed.get("points"):
+                    h = parsed["headline"].strip()
+                    pts = [p.strip() for p in parsed["points"] if p.strip()]
+                    if not is_hindi_text(h) and not any(is_hindi_text(p) for p in pts):
+                        return h, pts
+        except Exception:
+            pass
+
+    # Fallback points
+    en_summary = translate_hindi_to_english(clean_s, is_headline=False) if clean_s else ""
+    pts = []
+    if en_summary:
+        raw_splits = [p.strip() for p in re.split(r'[.\n|]', en_summary) if len(p.strip()) > 15]
+        pts = raw_splits[:3]
+    if not pts:
+        pts = [
+            "Official notification released on the university student portal.",
+            "Students can check individual details through their portal login.",
+            "Contact departmental administration for further guidelines."
+        ]
+    return en_title, pts
+
 def extract_json_from_response(text: str) -> dict:
     """Extracts JSON block from model response, handling nested structures and code fences."""
     try:
         clean = text.strip()
+        # Clean any markdown code blocks
+        clean = re.sub(r"^```(?:json)?\s*", "", clean, flags=re.MULTILINE)
+        clean = re.sub(r"\s*```$", "", clean, flags=re.MULTILINE).strip()
         first_brace = clean.find("{")
         last_brace = clean.rfind("}")
         if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
@@ -47,62 +188,86 @@ def extract_json_from_response(text: str) -> dict:
             return json.loads(json_str)
         return json.loads(clean)
     except Exception as e:
-        print(f"[AI Triage] JSON parse fallback: {e}")
         return {}
 
-def clean_text_no_urls(text: str) -> str:
-    """Strips any URLs, website domains, and media sources completely."""
-    clean = re.sub(r"https?://\S+", "", text)
-    clean = re.sub(r"(?:www\.)?(?:nexams|nadmissions|hpushimla|hpuniv)\.(?:in|ac\.in|org)", "portal", clean, flags=re.IGNORECASE)
-    clean = re.sub(r"(?:source|verified from|check on):\s*[\w\.\-/]+", "", clean, flags=re.IGNORECASE)
-    clean = re.sub(r"\s*-\s*(?:ANI\s*News|Amar\s*Ujala|Divya\s*Himachal|The\s*Tribune|Hindustan\s*Times|Times\s*of\s*India|Indian\s*Express|Jagran|News18).*$", "", clean, flags=re.IGNORECASE)
-    return clean.strip()
-
 def sanitize_language_consistency(parsed: dict, is_hindi: bool, fallback_title: str) -> dict:
-    """Enforces strict language parity so that Hindi news has 100% Hindi card texts & badges."""
+    """
+    Enforces strict English consistency for all carousel and post data.
+    Guarantees 0 Devanagari text in headline, badge, slides, key_points, and caption.
+    """
     if not parsed or not isinstance(parsed, dict):
         return parsed
 
-    if is_hindi:
-        # 1. Translate badge if English
-        badge = parsed.get("badge", "")
-        if not is_hindi_text(badge):
-            upper_b = badge.upper()
-            matched = False
-            for eng_k, hin_v in BADGE_MAP_TO_HINDI.items():
-                if eng_k in upper_b:
-                    parsed["badge"] = hin_v
-                    matched = True
-                    break
-            if not matched:
-                parsed["badge"] = "ताज़ा अपडेट"
+    # 1. Enforce English Badge
+    badge = parsed.get("badge", "")
+    if is_hindi_text(badge):
+        upper_b = badge.upper()
+        matched = False
+        for hin_k, eng_v in BADGE_MAP_TO_ENGLISH.items():
+            if hin_k in upper_b or hin_k in badge:
+                parsed["badge"] = eng_v
+                matched = True
+                break
+        if not matched:
+            parsed["badge"] = "CAMPUS UPDATE"
 
-        # 2. Check headline
-        headline = parsed.get("headline", "")
-        if not is_hindi_text(headline) and is_hindi_text(fallback_title):
-            parsed["headline"] = fallback_title[:60]
+    # 2. Enforce English Headline
+    headline = parsed.get("headline", "")
+    if is_hindi_text(headline):
+        parsed["headline"] = translate_hindi_to_english(headline, is_headline=True)
 
-        # 3. Check Slides
-        if "slides" in parsed and isinstance(parsed["slides"], list):
-            for idx, s in enumerate(parsed["slides"]):
-                if not isinstance(s, dict):
-                    continue
-                if idx == 0:
-                    if not is_hindi_text(s.get("title", "")) and is_hindi_text(fallback_title):
-                        s["title"] = fallback_title[:60]
-                    if not is_hindi_text(s.get("subtitle", "")):
-                        s["subtitle"] = "नवीनतम महत्वपूर्ण सूचना"
-                    if not is_hindi_text(s.get("badge", "")):
-                        s["badge"] = parsed.get("badge", "आधिकारिक सूचना")
-                else:
-                    heading = s.get("heading", "")
-                    if not is_hindi_text(heading):
-                        if idx == len(parsed["slides"]) - 1:
-                            s["heading"] = "महत्वपूर्ण निर्देश"
-                        elif idx == 1:
-                            s["heading"] = "मुख्य विवरण"
+    # 3. Enforce English Key Points
+    if "key_points" in parsed and isinstance(parsed["key_points"], list):
+        clean_pts = []
+        for pt in parsed["key_points"]:
+            if is_hindi_text(str(pt)):
+                clean_pts.append(translate_hindi_to_english(str(pt), is_headline=False))
+            else:
+                clean_pts.append(str(pt))
+        parsed["key_points"] = clean_pts
+
+    # 4. Enforce English Slides
+    if "slides" in parsed and isinstance(parsed["slides"], list):
+        for idx, s in enumerate(parsed["slides"]):
+            if not isinstance(s, dict):
+                continue
+            if idx == 0:
+                if is_hindi_text(s.get("title", "")):
+                    s["title"] = translate_hindi_to_english(s.get("title", ""), is_headline=True)
+                if is_hindi_text(s.get("subtitle", "")):
+                    s["subtitle"] = translate_hindi_to_english(s.get("subtitle", ""), is_headline=False)
+                if is_hindi_text(s.get("badge", "")):
+                    s["badge"] = parsed.get("badge", "CAMPUS UPDATE")
+            else:
+                heading = s.get("heading", "")
+                if is_hindi_text(heading):
+                    s["heading"] = translate_hindi_to_english(heading, is_headline=True)
+                if "points" in s and isinstance(s["points"], list):
+                    s_pts = []
+                    for pt in s["points"]:
+                        if is_hindi_text(str(pt)):
+                            s_pts.append(translate_hindi_to_english(str(pt), is_headline=False))
                         else:
-                            s["heading"] = "आवश्यक बिंदु व दिशा-निर्देश"
+                            s_pts.append(str(pt))
+                    s["points"] = s_pts
+
+    # 5. Enforce English Caption
+    caption = parsed.get("caption", "")
+    if is_hindi_text(caption):
+        h = parsed.get("headline", "HPU University Update")
+        b = parsed.get("badge", "CAMPUS UPDATE")
+        pts = parsed.get("key_points", [])
+        pts_str = "\n".join([f"• {p}" for p in pts[:4]])
+        parsed["caption"] = (
+            f"📢 {b}: {h}\n\n"
+            f"Here is what students need to know:\n"
+            f"{pts_str}\n\n"
+            f"Check your student portal for individual scorecards and schedules.\n"
+            f"Tag your batchmates below! 👇\n\n"
+            f"#hpu #hpushimla #hpuupdates #hpuresult #hpuexams #himachalpradeshuniversity #shimla"
+        )
+
+    return parsed
 
     return parsed
 
@@ -135,29 +300,16 @@ Preserve the exact examination names, semesters, dates, and instructions, but ex
 DO NOT mention or credit any other Instagram page or source.
 """
 
-    if is_hindi:
-        lang_mandate = """
+    lang_mandate = """
 CRITICAL LANGUAGE MANDATE:
-The source notice is in HINDI.
-You MUST write 100% of ALL fields in HINDI (शुद्ध व सरल हिंदी):
-- 'headline': Short, punchy headline in HINDI (max 8 words, e.g. "शोध: औषधीय पौधों से तैयार होंगे चांदी के कण", "बीएससी द्वितीय सेमेस्टर का परिणाम घोषित").
-- 'badge': Short uppercase category tag in HINDI (e.g. "ताज़ा अपडेट", "परीक्षा परिणाम", "परीक्षा सूचना", "प्रवेश सूचना", "शोध अपडेट").
-- 'key_points': ALL 3-4 bullet points MUST BE IN HINDI.
-- 'slides': Slide titles, subtitles, headings, and bullet points MUST ALL BE IN HINDI.
-- 'caption': Instagram caption MUST BE 100% IN HINDI.
-ABSOLUTELY NO ENGLISH HEADLINES, BADGES, OR SLIDE BULLETS FOR HINDI NOTICES.
-"""
-    else:
-        lang_mandate = """
-CRITICAL LANGUAGE MANDATE:
-The source notice is in ENGLISH.
-You MUST write 100% of ALL fields in ENGLISH:
-- 'headline': Short, punchy headline in ENGLISH (max 7 words).
+ALL OUTPUTS MUST BE 100% IN ENGLISH.
+Even if the source notice, newspaper article (e.g. Amar Ujala, Divya Himachal, The Tribune), or competitor Instagram/Telegram post is written in Hindi (Devanagari script), you MUST translate and synthesize all headlines, badges, subtitles, bullet points, summaries, and captions strictly into clear, professional ENGLISH.
+ABSOLUTELY NO HINDI (DEVANAGARI) SCRIPT OR HINDI WORDS IN THE OUTPUT.
+- 'headline': Short, punchy headline in ENGLISH (max 7-8 words).
 - 'badge': Short uppercase category tag in ENGLISH (e.g. "BREAKING NEWS", "RESULT OUT", "EXAM ALERT", "ADMISSION UPDATE").
 - 'key_points': ALL 3-4 bullet points MUST BE IN ENGLISH.
 - 'slides': Slide titles, subtitles, headings, and bullet points MUST ALL BE IN ENGLISH.
 - 'caption': Instagram caption MUST BE 100% IN ENGLISH.
-ABSOLUTELY NO HINDI HEADLINES, BADGES, OR SLIDE BULLETS FOR ENGLISH NOTICES.
 """
 
     prompt = f"""
@@ -183,13 +335,13 @@ STRICT USER MANDATES:
    - ACTION / IMPACT: What students need to do, deadline to note, or admin response.
 2. NO URLS OR WEBSITE LINKS:
    Never mention 'hpushimla.in', 'nexams', 'Download link', 'Source: ...'. Say "Available via student login" or "Check on the student portal".
-3. Headline: Short, punchy, maximum 7-8 words.
-4. KEY POINTS (3 to 4 points, max 18-20 words each):
+3. Headline: Short, punchy, maximum 7-8 words in ENGLISH.
+4. KEY POINTS (3 to 4 points in ENGLISH, max 18-20 words each):
    - Point 1: Core development (What happened)
    - Point 2: Specific Location & Timing (Where and When)
    - Point 3: Reasons, student demands, or criteria (Why)
    - Point 4: Action required / student impact (Next steps)
-5. Carousel Slides (2 to 4 slides):
+5. Carousel Slides (2 to 4 slides in ENGLISH):
    - Slide 1 (Cover): Punchy title + short subtitle + badge
    - Slide 2: Heading + 2-3 detailed bullet points
    - Slide 3: Heading + 2-3 detailed bullet points
@@ -263,52 +415,25 @@ Return ONLY a valid JSON object matching this schema:
             except Exception:
                 continue
 
-    # Clean Fallback with real context extraction and full language consistency
+    # Clean Fallback with real context extraction in 100% English
     is_breaking = item.get("priority") == "TIER1_BREAKING"
-
-    if is_hindi:
-        badge = "ताज़ा अपडेट" if is_breaking else "आधिकारिक सूचना"
-        headline = title[:60] or "एचपीयू विश्वविद्यालय सूचना"
-        location_str = "एचपीयू समरहिल परिसर, शिमला"
-        points = [
-            f"{title[:80]}",
-            f"स्थान: {location_str} | दिनांक: {notice_date}",
-            "विवरण: विस्तृत विभागीय निर्देशों के लिए अपने छात्र पोर्टल पर लॉगिन करें",
-            "यह पोस्ट सेव करें और अपने सहपाठियों के साथ शेयर करें"
-        ]
-        return {
-            "tier": "TIER1_BREAKING" if is_breaking else "TIER2_ROUTINE",
-            "category": item.get("category", "GENERAL"),
-            "badge": badge,
-            "headline": headline,
-            "audio_track_id": "cornfield_chase" if is_breaking else "reflections",
-            "key_points": points,
-            "slides": [
-                {"title": headline, "subtitle": f"दिनांक: {notice_date}", "badge": badge},
-                {"heading": "मुख्य जानकारी", "points": points[:2]},
-                {"heading": "विस्तृत विवरण और निर्देश", "points": points[2:]}
-            ],
-            "caption": (
-                f"📢 {badge}: {headline}\n\n"
-                f"छात्रों के लिए मुख्य बिंदु:\n"
-                f"• {points[0]}\n"
-                f"• {points[1]}\n"
-                f"• {points[2]}\n\n"
-                f"विस्तृत जानकारी के लिए आधिकारिक छात्र पोर्टल पर लॉगिन करें।\n"
-                f"अपने सहपाठियों को नीचे कमेंट्स में टैग करें! 👇\n\n"
-                f"#hpu #hpushimla #hpuupdates #hpuresult #hpuexams #himachalpradeshuniversity #shimla"
-            )
-        }
-
-    # English Fallback
     badge = "BREAKING NEWS" if is_breaking else "OFFICIAL UPDATE"
-    headline = title[:50] or "HPU University Notice"
+    
+    # Translate headline if in Hindi
+    if is_hindi_text(title):
+        en_title = translate_hindi_to_english(title, is_headline=True)
+    else:
+        en_title = title[:60] or "HPU University Notice"
+
     desc_clean = clean_text_no_urls(summary or raw_text or "")
+    if is_hindi_text(desc_clean):
+        desc_clean = translate_hindi_to_english(desc_clean, is_headline=False)
+
     where_match = re.search(r"(?:at|in|near)\s+([A-Z][a-zA-Z\s]{3,25}(?:Campus|Secretariat|Office|Auditorium|Lawns|Shimla|Summerhill))", desc_clean)
     location_str = where_match.group(0) if where_match else "HPU Summerhill Campus"
 
     points = [
-        f"{title[:80]}",
+        f"{en_title[:80]}",
         f"Location: {location_str} | Date: {notice_date}",
         "Details: Check your student login account for full departmental instructions",
         "Save this post & share with your classmates to stay updated"
@@ -318,16 +443,16 @@ Return ONLY a valid JSON object matching this schema:
         "tier": "TIER1_BREAKING" if is_breaking else "TIER2_ROUTINE",
         "category": item.get("category", "GENERAL"),
         "badge": badge,
-        "headline": headline,
+        "headline": en_title,
         "audio_track_id": "cornfield_chase" if is_breaking else "reflections",
         "key_points": points,
         "slides": [
-            {"title": headline, "subtitle": f"Date: {notice_date}", "badge": badge},
+            {"title": en_title, "subtitle": f"Date: {notice_date}", "badge": badge},
             {"heading": "What You Need to Know", "points": points[:2]},
             {"heading": "Key Details & Action", "points": points[2:]}
         ],
         "caption": (
-            f"📢 {badge}: {headline}\n\n"
+            f"📢 {badge}: {en_title}\n\n"
             f"Here is what students need to know:\n"
             f"• {points[0]}\n"
             f"• {points[1]}\n"
@@ -340,9 +465,8 @@ Return ONLY a valid JSON object matching this schema:
 
 def bundle_routine_carousels(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Combines multiple routine circulars into a single clean human-style carousel like @hpuupdates.
+    Combines multiple routine circulars into a single clean human-style carousel in 100% English like @hpuupdates.
     Zero URLs, concise points, knowledgeable tone.
-    Strict Language Parity: Hindi source -> 100% Hindi card & caption; English source -> 100% English.
     """
     if not items:
         return {}
@@ -356,45 +480,24 @@ def bundle_routine_carousels(items: List[Dict[str, Any]]) -> Dict[str, Any]:
         for it in items
     ])
     is_hindi = is_hindi_text(combined_bundle_text)
-    category_hi = CATEGORY_MAP_TO_HINDI.get(category, "नवीनतम")
     
-    # Format items for prompt
+    # Format items for prompt with translation if needed
     notices_formatted = []
     for idx, it in enumerate(items[:4], 1):
         clean_t = clean_text_no_urls(it.get("title", ""))
         clean_c = clean_text_no_urls(it.get("raw_text", "") or it.get("ocr_text", "") or "")[:200]
         notices_formatted.append(f"{idx}. Title: {clean_t}\n   Details: {clean_c}")
 
-    if is_hindi:
-        lang_mandate = f"""
+    lang_mandate = f"""
 CRITICAL LANGUAGE MANDATE:
-The source notices are written in HINDI.
-You MUST write 100% of all fields in HINDI (शुद्ध व सरल हिंदी):
-- Slide 1 (Cover):
-  "title": In HINDI (e.g. "एचपीयू {category_hi} अपडेट्स", "आज की महत्वपूर्ण अधिसूचनाएं")
-  "subtitle": In HINDI (e.g. "नवीनतम महत्वपूर्ण सूचनाएं व सर्कुलर")
-  "badge": In HINDI (e.g. "परीक्षा परिणाम", "परीक्षा सूचना", "प्रवेश सूचना", "आधिकारिक अपडेट")
-- Detail Slides:
-  "heading": In HINDI (e.g. "शोध व लैब अपग्रेड", "परीक्षा फॉर्म की तिथि")
-  "points": 2 to 3 concise bullet points in HINDI per slide (max 15 words per point).
-- Last Slide:
-  "heading": "महत्वपूर्ण निर्देश"
-  "points": ["विस्तृत अंकों व फॉर्म के लिए छात्र पोर्टल देखें", "भविष्य के लिए यह पोस्ट सेव करें", "सहपाठियों के साथ शेयर करें"]
-- 'headline': In HINDI (e.g. "एचपीयू ताज़ा अपडेट्स")
-- 'caption': Must be 100% in HINDI.
-ABSOLUTELY NO ENGLISH HEADINGS, ENGLISH BADGES, OR ENGLISH BULLETS FOR HINDI NOTICES.
-"""
-    else:
-        lang_mandate = f"""
-CRITICAL LANGUAGE MANDATE:
-The source notices are written in ENGLISH.
-You MUST write 100% of all fields in ENGLISH:
+ALL OUTPUTS MUST BE 100% IN ENGLISH.
+Even if the source notices are written in HINDI (e.g. from regional newspapers like Amar Ujala / Divya Himachal or Telegram channels), you MUST translate and write 100% of all fields in ENGLISH:
 - Slide 1 (Cover): "title", "subtitle", "badge" in ENGLISH.
 - Detail Slides: "heading" and "points" in ENGLISH.
 - Last Slide: "heading": "Important Note", "points" in ENGLISH.
 - 'headline': In ENGLISH.
 - 'caption': Must be 100% in ENGLISH.
-ABSOLUTELY NO HINDI HEADINGS, BADGES, OR BULLETS FOR ENGLISH NOTICES.
+ABSOLUTELY NO HINDI (DEVANAGARI) HEADINGS, BADGES, OR BULLETS.
 """
 
     prompt = f"""
@@ -408,12 +511,12 @@ STRICT USER RULES:
 {lang_mandate}
 1. NEVER mention any URLs, website domains, download links, or source citations (DO NOT mention 'hpushimla.in', 'nexams', 'nadmissions', 'Source: ...'). If referring to where to check, say "Available via student login" or "Check on the student portal".
 2. Tone: Friendly, concise, knowledgeable, written by a human student admin just like @hpuupdates.
-3. Carousel Slides structure:
+3. Carousel Slides structure (100% English):
    - Slide 1 (Cover): Punchy title + short subtitle + category badge
    - Next 2-3 Slides: Short heading + 2 to 3 concise, highly readable bullet points explaining what happened, who is affected, and what action to take (max 15 words per bullet). No emojis.
    - Last Slide: Summary guidance / Important Note
 4. Instagram Caption:
-   - Engaging hook
+   - Engaging hook in English
    - Clean bullet list of what was declared/released
    - Call to action ("Tag your classmates below 👇")
    - Relevant hashtags (#hpu #hpushimla #hpuupdates #hpuresults #hpuexams #himachalpradeshuniversity #shimla)
@@ -471,59 +574,15 @@ Return ONLY a valid JSON object matching this schema:
             except Exception:
                 continue
 
-    # Fallback if AI unavailable with strict language consistency
-    titles = [clean_text_no_urls(it.get("title", "")) for it in items]
+    # English Routine Fallback (Strictly English)
+    en_titles = []
+    for it in items:
+        raw_t = clean_text_no_urls(it.get("title", ""))
+        if is_hindi_text(raw_t):
+            en_titles.append(translate_hindi_to_english(raw_t, is_headline=True))
+        else:
+            en_titles.append(raw_t)
 
-    if is_hindi:
-        badge_hi = f"{category_hi} अपडेट"
-        cover_title = f"एचपीयू {category_hi} अपडेट्स"
-        slides = [
-            {
-                "title": cover_title,
-                "subtitle": f"{len(items)} महत्वपूर्ण अधिसूचनाएं जारी",
-                "badge": badge_hi
-            }
-        ]
-
-        for idx, it in enumerate(items[:3], start=1):
-            clean_t = clean_text_no_urls(it.get("title", ""))
-            slides.append({
-                "heading": f"अपडेट {idx}: {clean_t[:40]}",
-                "points": [
-                    clean_t[:70],
-                    "विस्तृत सूची व जानकारी के लिए छात्र पोर्टल देखें",
-                    "अंतिम तिथि से पहले आवश्यक प्रक्रिया पूर्ण करें"
-                ]
-            })
-
-        slides.append({
-            "heading": "महत्वपूर्ण निर्देश",
-            "points": [
-                "सभी विवरण अपने छात्र पोर्टल लॉगिन पर जांचें",
-                "भविष्य के संदर्भ के लिए यह पोस्ट सेव करें",
-                "अपने सहपाठियों के साथ अवश्य शेयर करें"
-            ]
-        })
-
-        caption = (
-            f"📢 एचपीयू {category_hi} अपडेट्स!\n\n"
-            f"आज जारी की गई महत्वपूर्ण अधिसूचनाएं:\n" +
-            "\n".join([f"• {t[:85]}" for t in titles[:4]]) +
-            f"\n\nविस्तृत जानकारी और फॉर्म के लिए छात्र पोर्टल पर लॉगिन करें।\n"
-            f"अपने सहपाठियों को नीचे कमेंट्स में टैग करें! 👇\n\n"
-            f"#hpu #hpushimla #hpuupdates #hpuresults #hpuexams #himachalpradeshuniversity #shimla"
-        )
-
-        return {
-            "tier": "TIER2_ROUTINE",
-            "category": category,
-            "badge": badge_hi,
-            "headline": f"एचपीयू {category_hi} अपडेट्स ({len(items)} सूचनाएं)",
-            "slides": slides,
-            "caption": caption
-        }
-
-    # English Routine Fallback
     slides = [
         {
             "title": f"HPU {category} UPDATES",
@@ -532,12 +591,11 @@ Return ONLY a valid JSON object matching this schema:
         }
     ]
 
-    for idx, it in enumerate(items[:3], start=1):
-        clean_t = clean_text_no_urls(it.get("title", ""))
+    for idx, (it, en_t) in enumerate(zip(items[:3], en_titles[:3]), start=1):
         slides.append({
             "heading": f"Update {idx}: {it.get('category', 'Notice')}",
             "points": [
-                clean_t[:70],
+                en_t[:70],
                 "Check your student login portal for detailed lists",
                 "Ensure to submit any applications before deadlines"
             ]
@@ -555,7 +613,7 @@ Return ONLY a valid JSON object matching this schema:
     caption = (
         f"📢 HPU {category} UPDATES!\n\n"
         f"Here are the latest notices released today:\n" +
-        "\n".join([f"• {t[:85]}" for t in titles[:4]]) +
+        "\n".join([f"• {t[:85]}" for t in en_titles[:4]]) +
         f"\n\nCheck your student account for individual marks & forms.\n"
         f"Tag your friends who need to see this! 👇\n\n"
         f"#hpu #hpushimla #hpuupdates #hpuresults #hpuexams #himachalpradeshuniversity #shimla"

@@ -11,7 +11,7 @@ if sys.stdout.encoding != 'utf-8':
 
 from .config import INSTAGRAM_HANDLE, MAX_DAILY_POSTS, MAX_DAILY_REEL_UPLOADS, DAILY_CAROUSEL_TIME
 from .scrapers import run_crawler_pipeline
-from .news_classifier import classify_and_synthesize_update, bundle_routine_carousels
+from .news_classifier import classify_and_synthesize_update, bundle_routine_carousels, translate_hindi_to_english, is_hindi_text
 from .card_renderer import render_breaking_card, render_carousel_slides, render_daily_roundup_carousel, clean_ascii_text
 from .reel_generator import create_looping_reel
 from .uploader import upload_image, upload_video
@@ -318,7 +318,16 @@ def publish_daily_7pm_news_carousel(dry_run: bool = False, is_manual: bool = Fal
     item_ids = [it.get("id") for it in waiting_items if it.get("id")]
     print(f"  Bundling {total_stories} daily news stories for 7 PM Carousel (IDs: {item_ids})...")
 
-    # Step 1: Render Carousel Cards (1 slide per story with Headline + Brief explanation)
+    # Step 0: Ensure all news items are translated to English (newspapers, channels, portals)
+    for it in waiting_items:
+        t = it.get("title", "")
+        if is_hindi_text(t):
+            it["title"] = translate_hindi_to_english(t, is_headline=True)
+        s = it.get("summary") or it.get("raw_text") or ""
+        if is_hindi_text(s):
+            it["summary"] = translate_hindi_to_english(s, is_headline=False)
+
+    # Step 1: Render Carousel Cards (1 slide per story with Headline + Brief explanation in 100% English)
     slide_paths = render_daily_roundup_carousel(waiting_items)
     print(f"  ✔ Rendered {len(slide_paths)} daily roundup carousel slides.")
 
@@ -330,7 +339,7 @@ def publish_daily_7pm_news_carousel(dry_run: bool = False, is_manual: bool = Fal
         print(f"  ✔ Slide {idx}/{len(slide_paths)} hosted: {url}")
         time.sleep(0.4)
 
-    # Step 3: Build cohesive daily roundup caption
+    # Step 3: Build cohesive daily roundup caption strictly in English
     date_display = datetime.now().strftime("%d %B %Y")
     headlines_summary = "\n".join([f"• {clean_ascii_text(it.get('title', ''))[:70]}" for it in waiting_items[:5]])
     caption = (

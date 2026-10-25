@@ -14,6 +14,7 @@ from .hpu_official_scraper import HPUOfficialScraper
 from .pdf_ocr_parser import process_circular_pdf
 from ..freshness import is_item_fresh
 from ..db import save_scraped_item, is_content_seen, compute_hash
+from ..news_classifier import translate_hindi_to_english, is_hindi_text
 
 def run_crawler_pipeline() -> List[Dict[str, Any]]:
     """
@@ -57,6 +58,17 @@ def run_crawler_pipeline() -> List[Dict[str, Any]]:
         if not fresh:
             # Drop old historical notices
             continue
+
+        # Translate Hindi news title to English (regional newspapers or competitor channels)
+        raw_title = item.get("title", "")
+        if is_hindi_text(raw_title):
+            try:
+                en_title = translate_hindi_to_english(raw_title, is_headline=True)
+                if en_title and not is_hindi_text(en_title):
+                    item["original_hindi_title"] = raw_title
+                    item["title"] = en_title
+            except Exception:
+                pass
 
         content_hash = compute_hash(f"{item.get('url')}_{item.get('title')}")
         item["content_hash"] = content_hash
