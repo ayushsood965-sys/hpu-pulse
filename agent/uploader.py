@@ -38,14 +38,14 @@ def upload_video(video_path: str) -> str:
         except Exception:
             pass
 
-    # Tier 1: Check if running on server with public domain
-    is_server = os.path.exists("/app/generated_cards") or os.getenv("COOLIFY_RESOURCE_UUID") or (os.name != "nt")
-    if is_server and SERVER_URL and "localhost" not in SERVER_URL:
+    # Tier 1: Check if public HTTPS domain is configured
+    is_public_domain = SERVER_URL and SERVER_URL.startswith("http") and "localhost" not in SERVER_URL and "127.0.0.1" not in SERVER_URL
+    if is_public_domain:
         direct_url = f"{SERVER_URL}/generated_cards/{filename}"
         print(f"  [Video Host] Direct Self-Hosted Video URL: {direct_url}")
         return direct_url
 
-    # Tier 2: Try tmpfiles.org for local development
+    # Tier 2: Try tmpfiles.org for local development or tunnel fallback
     try:
         with open(video_path, "rb") as f:
             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}

@@ -114,14 +114,14 @@ def start_scheduler(crawl_immediately: bool = False):
     )
 
     if crawl_immediately:
-        print("\n🚀 Executing initial crawl immediately upon startup...")
+        print("\n🚀 Executing initial crawl and reels scan immediately upon startup...")
         scheduled_crawler_job()
+        scheduled_reels_scanner_job()
 
     print("\n⚡ Autonomous HPU Pulse Agent is running in the background. Press Ctrl+C to stop.")
     try:
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
-        print("\n🛑 Scheduler stopped by user.")
         print("\n🛑 Scheduler stopped by user.")
 
 if __name__ == "__main__":
@@ -129,14 +129,20 @@ if __name__ == "__main__":
     parser.add_argument("--now", action="store_true", help="Crawl and check immediately on start")
     parser.add_argument("--carousel", action="store_true", help="Publish a routine carousel batch immediately")
     parser.add_argument("--reel", action="store_true", help="Publish a breaking reel immediately")
+    parser.add_argument("--scan-reels", action="store_true", help="Run viral curated reels scanner once immediately")
+    parser.add_argument("--post-curated-reel", action="store_true", help="Publish next queued curated reel immediately")
     parser.add_argument("--comments", action="store_true", help="Run comment responder once")
     args = parser.parse_args()
 
     if args.comments:
         process_comments()
+    elif args.scan_reels:
+        scheduled_reels_scanner_job()
+    elif args.post_curated_reel:
+        scheduled_reels_publisher_job()
     elif args.carousel:
-        publish_routine_carousel_cycle(dry_run=False)
+        publish_daily_7pm_news_carousel(dry_run=False, is_manual=True)
     elif args.reel:
-        publish_breaking_reel_cycle(dry_run=False)
+        publish_breaking_reel_cycle(dry_run=False, is_manual=True)
     else:
         start_scheduler(crawl_immediately=args.now)

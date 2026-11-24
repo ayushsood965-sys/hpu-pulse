@@ -214,8 +214,9 @@ def fetch_reel_metadata_and_download(
 def is_reel_qualified(meta: Dict[str, Any], lookback_days: int = REELS_LOOKBACK_DAYS) -> Tuple[bool, str]:
     """
     Enforces filtering rules:
-    1. Uploaded within the past `lookback_days` days (default 3-day rolling window).
+    1. Uploaded within the past `lookback_days` days (rolling window, default 14-day window).
     2. Engagement: Views >= 1000 OR Likes >= 200 OR Comments >= 100.
+       (For monitored channels: Views >= 500 OR Likes >= 80 OR Comments >= 20).
     """
     _, cutoff_str = get_rolling_date_cutoff(lookback_days)
     upload_date = meta.get("upload_date") or ""
@@ -226,6 +227,15 @@ def is_reel_qualified(meta: Dict[str, Any], lookback_days: int = REELS_LOOKBACK_
     views = int(meta.get("view_count") or 0)
     likes = int(meta.get("like_count") or 0)
     comments = int(meta.get("comment_count") or 0)
+
+    # Check if uploader is from monitored channels
+    uploader = (meta.get("uploader_handle") or "").strip().lower().lstrip("@")
+    active_monitored = [h.lower().lstrip("@") for h in get_active_target_handles()]
+    is_monitored = uploader in active_monitored
+
+    if is_monitored:
+        if views >= 500 or likes >= 80 or comments >= 20:
+            return True, f"Qualified [Monitored Channel @{uploader}] (Views: {views}, Likes: {likes}, Comments: {comments})"
 
     has_views = views >= 1000
     has_likes = likes >= 200
@@ -238,34 +248,48 @@ def is_reel_qualified(meta: Dict[str, Any], lookback_days: int = REELS_LOOKBACK_
 
 def scan_target_handles_for_reels(force_for_test: bool = False, lookback_days: int = REELS_LOOKBACK_DAYS) -> List[Dict[str, Any]]:
     """
-    Monitors all Category 1 to 4 target handles and general HPU keywords for newly published reels.
-    Identifies eligible reels within the past `lookback_days` days, applies cutoff & thresholds, and enqueues them.
+    Monitors all Category 1 to 4 target handles and viral HPU keywords for newly published reels.
+    Uses batched queries with recency parameter ('when:Xd') to reliably discover fresh viral videos.
+    Identifies eligible reels within the lookback window, applies cutoff & thresholds, and enqueues them.
     """
     active_handles = get_active_target_handles()
-    targets = [(h, f'site:instagram.com/reel "{h}"') for h in active_handles]
-    targets += [
-        ("hpu", 'site:instagram.com/reel "hpu"'),
-        ("himachal_pradesh_university", 'site:instagram.com/reel "himachal pradesh university"'),
-        ("hpushimla", 'site:instagram.com/reel "hpushimla"')
+    
+    # 1. Batch monitored handles into groups of 6 to maximize search yield per request
+    chunk_size = 6
+    batched_handle_queries = []
+    for i in range(0, len(active_handles), chunk_size):
+        chunk = active_handles[i:i + chunk_size]
+        handles_or = " OR ".join([f'"{h}"' for h in chunk])
+        batched_handle_queries.append((f"monitored_batch_{i//chunk_size + 1}", f'site:instagram.com/reel ({handles_or}) when:{lookback_days}d'))
+
+    # 2. Add high-yield campus, student, and viral keyword queries with recency
+    campus_queries = [
+        ("hpu_campus_core", f'site:instagram.com/reel ("hpushimla" OR "hpu shimla" OR "himachal pradesh university" OR "hpucampus") when:{lookback_days}d'),
+        ("hpu_summerhill", f'site:instagram.com/reel ("summerhill" shimla OR "summer hill" hpu OR "hpushimlalife") when:{lookback_days}d'),
+        ("hpu_student_orgs", f'site:instagram.com/reel (SFI OR ABVP OR NSUI OR SCA) ("HPU" OR "Shimla") when:{lookback_days}d'),
+        ("hpu_shimla_general", f'site:instagram.com/reel ("HPU" Shimla) when:{lookback_days}d'),
+        ("hpu_viral_reels", f'site:instagram.com/reel ("HPU" viral OR "HPU" reel OR "HPU" campus) when:{lookback_days}d')
     ]
+
+    targets = batched_handle_queries + campus_queries
     cutoff_date, cutoff_str = get_rolling_date_cutoff(lookback_days)
-    print(f"\n[ReelsCurator] 🔍 Starting scan across {len(targets)} HPU search targets (rolling {lookback_days}-day window from {cutoff_str})...")
+    print(f"\n[ReelsCurator] 🔍 Starting scan across {len(targets)} batched HPU search targets (rolling {lookback_days}-day window from {cutoff_str})...")
     discovered = []
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
     today_str = datetime.now().strftime("%Y-%m-%d")
     tomorrow_str = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    for handle, query_text in targets:
+    for handle_label, query_text in targets:
         try:
             query = urllib.parse.quote(query_text)
             rss_url = f"https://news.google.com/rss/search?q={query}&hl=en-IN&gl=IN&ceid=IN:en"
-            res = requests.get(rss_url, headers=headers, timeout=10)
+            res = requests.get(rss_url, headers=headers, timeout=12)
             if res.status_code != 200:
                 continue
 
             root = ET.fromstring(res.content)
-            items = root.findall(".//item")[:8]
+            items = root.findall(".//item")[:15]
 
             for item in items:
                 pub_date_str = item.find("pubDate").text if item.find("pubDate") is not None else ""
@@ -284,7 +308,11 @@ def scan_target_handles_for_reels(force_for_test: bool = False, lookback_days: i
                         pass
 
                 # Resolve Google News redirect to direct Instagram URL
-                decoded = gnewsdecoder(article_url)
+                try:
+                    decoded = gnewsdecoder(article_url)
+                except Exception:
+                    decoded = None
+
                 if not decoded or not decoded.get("success"):
                     continue
 
@@ -293,22 +321,27 @@ def scan_target_handles_for_reels(force_for_test: bool = False, lookback_days: i
                 if not shortcode or is_curated_reel_seen(shortcode, direct_url) or is_reel_already_published(shortcode, direct_url):
                     continue
 
-
                 # Inspect reel metadata via yt-dlp
                 meta = fetch_reel_metadata_and_download(direct_url, download=False)
                 if not meta:
                     continue
 
-                # If uploader not extracted from video, use the target handle
+                # If uploader not extracted from video, fallback
                 if not meta.get("uploader_handle"):
-                    meta["uploader_handle"] = handle
+                    meta["uploader_handle"] = handle_label if not handle_label.startswith("monitored_") else "hpu_creator"
+
+                # Content relevance check (avoid US High Point University, noise, etc.)
+                caption_text = (meta.get("caption") or "") + " " + (item.find("title").text or "")
+                if not is_hpu_content_relevant(caption_text, meta.get("uploader_handle", "")):
+                    print(f"  [ReelsCurator] Reel {shortcode} (@{meta['uploader_handle']}) skipped: Non-HPU content.")
+                    continue
 
                 qualified, reason = is_reel_qualified(meta, lookback_days=lookback_days)
                 print(f"  [ReelsCurator] Reel {shortcode} (@{meta['uploader_handle']}): {reason}")
                 if not qualified and not force_for_test:
                     continue
 
-                # Quota calculation: if today's uploads already reached 15, schedule for tomorrow
+                # Quota calculation: if today's uploads already reached MAX_DAILY_REEL_UPLOADS, schedule for tomorrow
                 today_count = get_daily_curated_reels_count(today_str)
                 if today_count >= MAX_DAILY_REEL_UPLOADS:
                     meta["status"] = "QUEUED_FOR_NEXT_DAY"
@@ -317,14 +350,15 @@ def scan_target_handles_for_reels(force_for_test: bool = False, lookback_days: i
                     meta["status"] = "PENDING"
                     meta["target_post_date"] = today_str
 
+                meta["discovery_source"] = f"Viral Radar: {handle_label}"
                 reel_id = save_curated_reel(meta)
                 if reel_id:
                     meta["id"] = reel_id
                     discovered.append(meta)
-                    print(f"  ✅ [ReelsCurator] Successfully enqueued reel #{reel_id} ({shortcode}) with status {meta['status']}")
+                    print(f"  ✅ [ReelsCurator] Successfully enqueued viral reel #{reel_id} ({shortcode}) with status {meta['status']}")
 
         except Exception as e:
-            print(f"[ReelsCurator] Error scanning handle @{handle}: {e}")
+            print(f"[ReelsCurator] Error scanning query target '{handle_label}': {e}")
 
     print(f"[ReelsCurator] 🏁 Scan completed. Discovered & enqueued {len(discovered)} new eligible reels.\n")
     return discovered
@@ -415,9 +449,9 @@ def publish_curated_reel_record(reel_record: Dict[str, Any], dry_run: bool = Fal
         if reel_id:
             update_curated_reel_video_hash(reel_id, video_hash)
 
-    # 2. Form publicly accessible URL
+    # 2. Form publicly accessible URL for Meta ingestion
     video_filename = Path(local_path).name
-    public_video_url = f"{SERVER_URL}/generated_cards/curated_reels/{video_filename}"
+    public_video_url = upload_video(local_path)
     print(f"  🌐 Public Video URL: {public_video_url}")
 
     # 3. Generate Attribution Caption
@@ -611,55 +645,94 @@ def crawl_and_publish_single_reel_now(url: str, force: bool = True) -> Dict[str,
 # =========================================================================
 
 PUBLIC_REEL_DISCOVERY_TARGETS = [
-    ("#hpushimla", 'site:instagram.com/reel "#hpushimla"'),
-    ("#hpucampus", 'site:instagram.com/reel "#hpucampus"'),
-    ("#himachalpradeshuniversity", 'site:instagram.com/reel "#himachalpradeshuniversity"'),
-    ("#summerhillshimla", 'site:instagram.com/reel "#summerhillshimla"'),
-    ("#hpushimlalife", 'site:instagram.com/reel "#hpushimlalife"'),
-    ("#hpuuniversity", 'site:instagram.com/reel "#hpuuniversity"'),
-    ("hpu_viral", 'site:instagram.com/reel "HPU Shimla" viral'),
-    ("hpu_summerhill", 'site:instagram.com/reel "HPU Summerhill"'),
-    ("hpu_fest_campus", 'site:instagram.com/reel "HPU" (fest OR campus OR protest OR snowfall OR library)'),
-    ("hpu_students", 'site:instagram.com/reel "HPU Shimla" (students OR reels)')
+    ("#hpushimla", 'site:instagram.com/reel ("#hpushimla" OR "#hpucampus") when:14d'),
+    ("#himachalpradeshuniversity", 'site:instagram.com/reel ("#himachalpradeshuniversity" OR "himachal pradesh university") when:14d'),
+    ("#summerhillshimla", 'site:instagram.com/reel ("#summerhillshimla" OR "summerhill shimla") when:14d'),
+    ("#hpushimlalife", 'site:instagram.com/reel ("#hpushimlalife" OR "HPU Shimla") when:14d'),
+    ("hpu_viral", 'site:instagram.com/reel ("HPU" viral OR "HPU" reel) when:14d'),
+    ("hpu_fest_campus", 'site:instagram.com/reel "HPU" (fest OR campus OR protest OR snowfall OR library) when:14d'),
+    ("hpu_students", 'site:instagram.com/reel "HPU Shimla" (students OR reels) when:14d')
 ]
 
 HPU_RELEVANCE_KEYWORDS = [
-    "hpu", "himachal pradesh university", "summerhill", "summer hill",
+    "himachal pradesh university", "summerhill", "summer hill",
     "shimla university", "hpushimla", "hpucampus", "vc office", "dr. ambedkar",
     "hpu_shimla", "hpushimlalife", "shimla"
 ]
 
-def is_hpu_content_relevant(text: str) -> bool:
-    """Verifies that discovered reel text actually pertains to Himachal Pradesh University."""
+def is_hpu_content_relevant(text: str, uploader_handle: str = "") -> bool:
+    """
+    Verifies that discovered reel text actually pertains to Himachal Pradesh University.
+    Filters out noise, foreign universities (High Point University @highpointu, Hawaii Pacific, etc.).
+    """
     if not text:
         return False
-    lower_text = text.lower()
-    return any(kw in lower_text for kw in HPU_RELEVANCE_KEYWORDS)
+    lower = f"{text} {uploader_handle}".lower()
 
-def scan_public_user_reels(lookback_days: int = REELS_LOOKBACK_DAYS) -> List[Dict[str, Any]]:
+    # 1. Negative filters: exclude non-Himachal universities, US colleges, noise
+    negative_keywords = [
+        "high point university", "highpointu", "highpoint", "high point",
+        "hawaii pacific", "hpu panthers", "north carolina", "nc panthers",
+        "honolulu", "qatar", "highpointuniv", "panthers basketball"
+    ]
+    if any(neg in lower for neg in negative_keywords):
+        return False
+
+    # 2. Strong explicit matches for Himachal Pradesh University
+    strong_keywords = [
+        "himachal pradesh university", "hpushimla", "hpucampus", "hpushimlalife",
+        "summerhill", "summer hill", "hpu shimla", "shimla university",
+        "hpu_shimla", "uit hpu", "uils hpu", "hpubs", "hpuupdate", "hpudailyupdates"
+    ]
+    if any(sk in lower for sk in strong_keywords):
+        return True
+
+    # 3. Monitored handles check
+    clean_u = (uploader_handle or "").strip().lower().lstrip("@")
+    active_monitored = [h.lower().lstrip("@") for h in get_active_target_handles()]
+    if clean_u in active_monitored:
+        return True
+
+    # 4. Contextual match: "hpu" + regional or academic indicator
+    has_hpu = "hpu" in lower
+    context_words = [
+        "shimla", "himachal", "summerhill", "summer hill", "varsity", "campus",
+        "sfi", "abvp", "nsui", "datesheet", "result", "counselling", "admission",
+        "protest", "vc office", "auditorium", "library", "student", "youth festival",
+        "snowfall", "pahadi", "semester", "exam"
+    ]
+    if has_hpu and any(cw in lower for cw in context_words):
+        return True
+
+    return False
+
+def scan_public_user_reels(lookback_days: int = REELS_LOOKBACK_DAYS, auto_enqueue_for_posting: bool = True) -> List[Dict[str, Any]]:
     """
     Scans public hashtags, locations, and search radar for viral HPU reels from other users.
-    Discovered reels are queued with status 'DISCOVERED_PENDING_REVIEW' (NEVER autoposted).
-    User can review and manually choose to publish one or all to the Instagram page.
+    If auto_enqueue_for_posting is True: Qualified reels are queued as 'PENDING' for the daily posting schedule.
+    If auto_enqueue_for_posting is False: Queued as 'DISCOVERED_PENDING_REVIEW' for manual review.
     """
     cutoff_date, cutoff_str = get_rolling_date_cutoff(lookback_days)
-    active_monitored = [h.lower() for h in get_active_target_handles()]
-    print(f"\n[ReelsCurator] 🌐 Starting Public User Reel Radar across {len(PUBLIC_REEL_DISCOVERY_TARGETS)} hashtag/location queries...")
+    active_monitored = [h.lower().lstrip("@") for h in get_active_target_handles()]
+    print(f"\n[ReelsCurator] 🌐 Starting Public User Reel Radar across {len(PUBLIC_REEL_DISCOVERY_TARGETS)} queries (lookback {lookback_days}d from {cutoff_str})...")
     discovered = []
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
     today_str = datetime.now().strftime("%Y-%m-%d")
+    tomorrow_str = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
 
     for source_label, query_text in PUBLIC_REEL_DISCOVERY_TARGETS:
         try:
-            query = urllib.parse.quote(query_text)
+            # Inject dynamic lookback days if needed
+            q_formatted = query_text.replace("when:14d", f"when:{lookback_days}d")
+            query = urllib.parse.quote(q_formatted)
             rss_url = f"https://news.google.com/rss/search?q={query}&hl=en-IN&gl=IN&ceid=IN:en"
-            res = requests.get(rss_url, headers=headers, timeout=10)
+            res = requests.get(rss_url, headers=headers, timeout=12)
             if res.status_code != 200:
                 continue
 
             root = ET.fromstring(res.content)
-            items = root.findall(".//item")[:10]
+            items = root.findall(".//item")[:12]
 
             for item in items:
                 pub_date_str = item.find("pubDate").text if item.find("pubDate") is not None else ""
@@ -678,7 +751,11 @@ def scan_public_user_reels(lookback_days: int = REELS_LOOKBACK_DAYS) -> List[Dic
                         pass
 
                 # Resolve Google News redirect to direct Instagram URL
-                decoded = gnewsdecoder(article_url)
+                try:
+                    decoded = gnewsdecoder(article_url)
+                except Exception:
+                    decoded = None
+
                 if not decoded or not decoded.get("success"):
                     continue
 
@@ -687,15 +764,17 @@ def scan_public_user_reels(lookback_days: int = REELS_LOOKBACK_DAYS) -> List[Dic
                 if not shortcode or is_curated_reel_seen(shortcode, direct_url) or is_reel_already_published(shortcode, direct_url):
                     continue
 
-
                 # Extract reel metadata via yt-dlp
                 meta = fetch_reel_metadata_and_download(direct_url, download=False)
                 if not meta:
                     continue
 
-                uploader = (meta.get("uploader_handle") or "").strip().lower()
-                # If this reel is from one of the 40 monitored channels, let the channel pipeline handle it
-                if uploader and uploader in active_monitored:
+                uploader = (meta.get("uploader_handle") or "").strip().lower().lstrip("@")
+                caption_text = (meta.get("caption") or "") + " " + (item.find("title").text or "")
+
+                # Content relevance check (avoid irrelevant videos using random hashtags)
+                if not is_hpu_content_relevant(caption_text, uploader):
+                    print(f"  [Radar] Reel {shortcode} (@{meta['uploader_handle']}) skipped: Content not relevant to HPU.")
                     continue
 
                 # Engagement threshold check (views >= 1000 OR likes >= 200 OR comments >= 100)
@@ -704,27 +783,30 @@ def scan_public_user_reels(lookback_days: int = REELS_LOOKBACK_DAYS) -> List[Dic
                     print(f"  [Radar] Reel {shortcode} (@{meta['uploader_handle']}): {reason}")
                     continue
 
-                # Content relevance check (avoid irrelevant videos using random hashtags)
-                full_text = (meta.get("caption") or "") + " " + (meta.get("uploader_handle") or "") + " " + source_label
-                if not is_hpu_content_relevant(full_text):
-                    print(f"  [Radar] Reel {shortcode} (@{meta['uploader_handle']}) skipped: Content not relevant to HPU.")
-                    continue
+                if auto_enqueue_for_posting:
+                    today_count = get_daily_curated_reels_count(today_str)
+                    if today_count >= MAX_DAILY_REEL_UPLOADS:
+                        meta["status"] = "QUEUED_FOR_NEXT_DAY"
+                        meta["target_post_date"] = tomorrow_str
+                    else:
+                        meta["status"] = "PENDING"
+                        meta["target_post_date"] = today_str
+                else:
+                    meta["status"] = "DISCOVERED_PENDING_REVIEW"
+                    meta["target_post_date"] = today_str
 
-                # Enqueue with DISCOVERED_PENDING_REVIEW status - NEVER autoposted!
-                meta["status"] = "DISCOVERED_PENDING_REVIEW"
                 meta["discovery_source"] = f"Hashtag Radar: {source_label}"
-                meta["target_post_date"] = today_str
 
                 reel_id = save_curated_reel(meta)
                 if reel_id:
                     meta["id"] = reel_id
                     discovered.append(meta)
-                    print(f"  🌟 [Radar] Discovered public reel #{reel_id} ({shortcode}) by @{meta['uploader_handle']} via {source_label} [QUEUED FOR REVIEW]")
+                    print(f"  🌟 [Radar] Discovered viral reel #{reel_id} ({shortcode}) by @{meta['uploader_handle']} via {source_label} [STATUS: {meta['status']}]")
 
         except Exception as e:
             print(f"[ReelsCurator] Error scanning public radar query '{source_label}': {e}")
 
-    print(f"[ReelsCurator] 🏁 Public User Reel Radar completed. Found {len(discovered)} potential reels for manual review.\n")
+    print(f"[ReelsCurator] 🏁 Public User Reel Radar completed. Found & enqueued {len(discovered)} viral reels.\n")
     return discovered
 
 def publish_single_discovered_reel(reel_id: int, dry_run: bool = False) -> Dict[str, Any]:
